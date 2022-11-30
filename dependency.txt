@@ -1,0 +1,2 @@
+#DEPENDENCIES
+https://github.com/jmscreation/libasio	main
