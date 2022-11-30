@@ -1,7 +1,3 @@
-#ifdef _WIN32
-#define _WIN32_WINDOWS
-#endif
-
 #define ASIO_STANDALONE
 #include "ip_tools.h"
 

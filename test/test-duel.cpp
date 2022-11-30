@@ -101,6 +101,14 @@ std::map<std::string, Command> commands {
 
             std::string ip = args.at(0);
             
+            {
+                asio::ip::address addr;
+                if(!stoip(ip, addr)){
+                    std::cout << "invalid ip address\n";
+                    return false;
+                }
+            }
+            
             int port = 0;
             if(args.size() > 1){
                 try {

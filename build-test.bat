@@ -32,7 +32,7 @@ set LIBRARY_NAMES=ws2_32 wsock32
 
 
 :: Additional Compiler Flags And Configuration Settings
-set CPP_COMPILER_FLAGS=-std=c++20
+set CPP_COMPILER_FLAGS=-std=c++20 -D_WIN32_WINDOWS
 set C_COMPILER_FLAGS=
 set OBJECT_DIRECTORY=.objs
 
