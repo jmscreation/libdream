@@ -5,17 +5,38 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <iomanip>
 #include <map>
 #include <functional>
 
 
-class TestServer {
-public:
-    TestServer() {
+#include <sstream>
+#include <cereal/types/map.hpp>
+#include <cereal/types/memory.hpp>
+#include <cereal/archives/binary.hpp>
 
+struct Test {
+    int x, y, z;
+    double d;
+    std::string name;
+
+    template<typename Archive>
+    void serialize(Archive& ar) {
+        ar(x,y,z,d,name);
     }
+};
+
+class TestServer {
+    dream::Server server;
+public:
+    TestServer() {}
 
     int RunServer() {
+
+        if(!server.start_server(5050)){
+            std::cout << "error starting server\n";
+            return 1;
+        }
 
         while(OnUpdate());
 
@@ -23,8 +44,11 @@ public:
     }
 
 private:
+
+
     bool OnUpdate() {
         Clock::sleepMilliseconds(15);
+
 
         return true;
     }

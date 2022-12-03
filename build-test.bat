@@ -18,7 +18,7 @@ set COMMANDLINE=1
 set VERBOSE=0
 
 set AUTO_REBUILD=1
-set REBUILD_SOURCE_DIRECTORIES=0
+set REBUILD_SOURCE_DIRECTORIES=1
 set REBUILD_SOURCE_LIBRARIES=0
 set ASYNC_BUILD=1
 
@@ -27,7 +27,7 @@ set LINK_ONLY=0
 :: Configure Source For Compiling And Additional Custom Library Directories / Names
 set SOURCE_DIRECTORIES=src test
 set INCLUDE_DIRECTORIES=include test
-set LIBRARY_DIRECTORIES=libraries/libasio-main
+set LIBRARY_DIRECTORIES=libraries/libasio-main libraries/cereal-master
 set LIBRARY_NAMES=ws2_32 wsock32
 
 
