@@ -21,6 +21,8 @@ public:
     Block(const Block&) = delete;
     Block& operator=(const Block&) = delete;
 
+    void clear(); // completely clear all blob data within this block
+
     template<typename T, typename... Args>
     Blob<T>& insert_blob(const std::string& name, Args&&... args) {
 

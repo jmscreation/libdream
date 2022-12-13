@@ -1,5 +1,5 @@
 #include "libdream.h"
-
+#include <algorithm>
 namespace dream {
 
 Server::Server(): idle(ctx), listener(ctx), header({}), cur_uuid(1), runtime_running(false) {}
@@ -24,6 +24,9 @@ void Server::reset_listener() {
 
 void Server::start_runtime() {
     if(!runtime_running){
+        auto& b = blobdata.insert_blob<std::string>("test_blob", "");
+        std::cout << "Preset Data: " << b.get() << "\n";
+
         runtime_handle = std::thread([this](){
             runtime_running = true;
             while(runtime_running){
@@ -39,6 +42,7 @@ void Server::start_runtime() {
 
 void Server::stop_runtime() {
     runtime_running = false;
+    blobdata.clear();
     if(runtime_handle.joinable()){
         runtime_handle.join();
     }
@@ -70,6 +74,7 @@ bool Server::start_server(short port, const std::string& ip) {
 
     start_context_handle();
     start_runtime();
+
 
     return true;
 }
@@ -120,16 +125,17 @@ void Server::server_runtime() { // check for and remove invalid clients
 
     if(ping_timeout.getSeconds() > 10){
         for(auto it = clients.begin(); it != clients.end(); ++it){
-            if(!it->second){
-                clients.erase(it++);
+            if(!it->second.get()){
+                clients.erase(it);
+                it = clients.begin(); // reset iterator - less efficient, but simple
                 if(it == clients.end()) break;
             }
         }
-
         for(auto& [id, client] : clients){
+            if(!client->is_valid() || !client->is_authorized()) continue;
+
             client->send_command(Command(Command::PING));
-            Blob<std::string> blob;
-            *blob = "Hello";
+            auto& blob = blobdata.get_blob<std::string>("test_blob");
             client->send_command(Command(Command::TEST, blob));
         }
         ping_timeout.restart();

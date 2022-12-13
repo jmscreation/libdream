@@ -1,6 +1,7 @@
 #pragma once
 
 #include "dream_client_object.h"
+#include "dream_block.h"
 #include "ip_tools.h"
 
 #include <map>
@@ -24,10 +25,12 @@ class Server {
     asio::io_context ctx;
     asio::io_context::work idle;
     asio::ip::tcp::acceptor listener;
-
+    
     ServerHeader header;
     uint64_t cur_uuid;
     std::map<uint64_t, std::unique_ptr<ClientObject>> clients;
+
+    Block blobdata;
 
     std::thread ctx_handle, runtime_handle;
     std::atomic_bool runtime_running;

@@ -24,8 +24,9 @@ class Blob : public BasicBlob {
         blob_box->dirty = dirty;
     }
 
-public:
     Blob(): blob_box(nullptr), id({}), data(nullptr) {}
+
+public:
 
     template<typename... Args>
     Blob(BlobBox* box, uint64_t id, Args&&... args): blob_box(box), id(id), data(new T(std::forward<Args>(args)...)) {} // block populate method
