@@ -15,7 +15,6 @@ ClientObject::~ClientObject() {
 
 bool ClientObject::send_raw_data(const char* data, size_t length, std::function<void(bool success)> on_complete) {
     if(!is_valid()) return false;
-    sending_raw_data = true;
 
     auto buf = asio::buffer(data, length);
     
@@ -76,7 +75,9 @@ void ClientObject::server_authorize() {
     }, [&](const asio::error_code& error, size_t bytes){
         if(error) return;
         std::string rcv(authbuf, 5);
-        server_authorized = (rcv == "GET /");
+        if(server_authorized = (rcv == "GET /")){
+            authorizing = false;
+        }
     });
 }
 
