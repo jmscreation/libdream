@@ -18,7 +18,7 @@ class ClientObject {
     uint64_t id;
     std::string name;
 
-    std::atomic_bool server_authorized, authorizing, sending_raw_data, valid;
+    std::atomic_bool server_authorized, authorizing, valid;
     char authbuf[16] {}; // small buffer for authorization
 
     std::mutex outgoing_command_lock, shutdown_lock;
@@ -27,7 +27,7 @@ class ClientObject {
 public:
     ClientObject(asio::io_context& ctx, asio::ip::tcp::socket&& soc, uint64_t id, std::string name):
         ctx(ctx), socket(std::move(soc)), id(id), name(name),
-        server_authorized(false), authorizing(false), sending_raw_data(false), valid(true) {}
+        server_authorized(false), authorizing(false), valid(true) {}
 
     ~ClientObject();
 
@@ -50,10 +50,6 @@ public:
 private:
     bool incoming_data_handle();
     bool outgoing_data_handle();
-
-
-    std::size_t socket_progress(const size_t length, const asio::error_code& error, std::size_t bytes_transferred);
-    void socket_oncomplete(const asio::error_code& error, std::size_t bytes_transferred);
 
     void process_command(Command& cmd);
 
