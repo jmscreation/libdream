@@ -4,6 +4,7 @@
 #include <sstream>
 #include <fstream>
 #include <functional>
+#include <algorithm>
 
 namespace dream {
 
@@ -41,6 +42,7 @@ bool ClientObject::send_raw_data(const char* data, size_t length, std::function<
 void ClientObject::send_command(const Command& cmd) {
     std::scoped_lock lock(outgoing_command_lock);
     std::stringstream& raw = out_data.emplace_back();
+    auto* raddr = &raw;
     { 
         cereal::BinaryOutputArchive archive(raw);
         archive(cmd);
@@ -48,7 +50,10 @@ void ClientObject::send_command(const Command& cmd) {
     
     // This is a C++20 hack that essentially gets a read-only const char* + length buffer view of the stringstream;
     //  It is extremely important that the stringstream object will never change after these pointer values are captured
-    send_raw_data(raw.view().data(), raw.view().length(), [&, cmd](bool success){
+    send_raw_data(raw.view().data(), raw.view().length(), [this, cmd, raddr](bool success){
+        std::scoped_lock lock(outgoing_command_lock);
+        std::erase_if(out_data.begin(), out_data.end(), [&](const auto& o){ return &o = raddr; });
+
         std::cout << "sent command type " << cmd.type << " to " << name << " " << (success ? "success" : "failed") << "\n";
     });
 }
@@ -82,7 +87,7 @@ void ClientObject::server_authorize() {
 }
 
 void ClientObject::client_authorize() {
-    // memcpy(authbuf, "GET /", 5); // temporary authorization code -- this code lets a browser client connect
+    memcpy(authbuf, "GET /", 5); // temporary authorization code -- this code lets a browser client connect
     send_raw_data(authbuf, sizeof(authbuf));
 }
 
