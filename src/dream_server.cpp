@@ -128,6 +128,9 @@ void Server::server_runtime() { // check for and remove invalid clients
 
         for(auto& [id, client] : clients){
             client->send_command(Command(Command::PING));
+            Blob<std::string> blob;
+            *blob = "Hello";
+            client->send_command(Command(Command::TEST, blob));
         }
         ping_timeout.restart();
     }

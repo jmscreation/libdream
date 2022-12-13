@@ -45,8 +45,6 @@ class Server {
     void server_runtime();
 
     // asynchronous callbacks
-    bool validate_socket(asio::ip::tcp::socket& soc); // blocking - determines that connecting socket is valid
-
     void new_client_socket(asio::ip::tcp::socket&& soc);
 
     // asynchronous loop backs

@@ -1,4 +1,3 @@
-#define ASIO_STANDALONE
 #include "ip_tools.h"
 
 using asio::ip::tcp;

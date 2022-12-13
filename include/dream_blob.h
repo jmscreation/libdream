@@ -20,6 +20,7 @@ class Blob : public BasicBlob {
     T* data;
 
     void set_dirty(bool dirty=true) {
+        if(!blob_box) return;
         blob_box->dirty = dirty;
     }
 
@@ -44,6 +45,11 @@ public:
         return *data;
     }
 
+    Block* get_owner() {
+        if(!blob_box) return nullptr;
+        return blob_box->owner;
+    }
+
     const T& get() const { // return a const reference access to object
         return *static_cast<const T*>(data);
     }
@@ -54,7 +60,7 @@ public:
 
     template<class Archive>
     void serialize(Archive& archive) {
-        archive(*data);
+        archive(id.value(), *data);
     }
 
 };

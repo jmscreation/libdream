@@ -50,11 +50,9 @@ void ClientObject::send_command(const Command& cmd) {
     
     // This is a C++20 hack that essentially gets a read-only const char* + length buffer view of the stringstream;
     //  It is extremely important that the stringstream object will never change after these pointer values are captured
-    send_raw_data(raw.view().data(), raw.view().length(), [this, cmd, raddr](bool success){
+    send_raw_data(raw.view().data(), raw.view().length(), [this, raddr](bool success){
         std::scoped_lock lock(outgoing_command_lock);
-        std::erase_if(out_data.begin(), out_data.end(), [&](const auto& o){ return &o = raddr; });
-
-        std::cout << "sent command type " << cmd.type << " to " << name << " " << (success ? "success" : "failed") << "\n";
+        std::remove_if(out_data.begin(), out_data.end(), [&](const auto& o) -> bool { return &o == raddr; });
     });
 }
 
@@ -80,8 +78,9 @@ void ClientObject::server_authorize() {
     }, [&](const asio::error_code& error, size_t bytes){
         if(error) return;
         std::string rcv(authbuf, 5);
-        if(server_authorized = (rcv == "GET /")){
+        if(server_authorized = (rcv == "GET /")){ // authorized successful
             authorizing = false;
+            on_authorized(*this);
         }
     });
 }
@@ -99,6 +98,7 @@ void ClientObject::shutdown() {
     if(socket.is_open()){
         std::cout << name << " connection closed\n";
         socket.close();
+        on_disconnected(*this);
     }
 }
 

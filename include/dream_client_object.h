@@ -23,11 +23,15 @@ class ClientObject {
 
     std::mutex outgoing_command_lock, shutdown_lock;
     std::list<std::stringstream> out_data; // buffers for outgoing data
+    
+    // client hooks
+    std::function<void(ClientObject&)> on_authorized, on_disconnected;
 
 public:
     ClientObject(asio::io_context& ctx, asio::ip::tcp::socket&& soc, uint64_t id, std::string name):
         ctx(ctx), socket(std::move(soc)), id(id), name(name),
-        server_authorized(false), authorizing(false), valid(true) {}
+        server_authorized(false), authorizing(false), valid(true),
+        on_authorized([](ClientObject&){}), on_disconnected([](ClientObject&){}) {}
 
     ~ClientObject();
 
