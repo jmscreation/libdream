@@ -34,3 +34,5 @@
 # Libraries Directory
 /libraries
 /.vscode
+/.vs
+/x64

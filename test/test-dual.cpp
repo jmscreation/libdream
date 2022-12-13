@@ -40,15 +40,19 @@ public:
 
         while(OnUpdate());
 
+        server.stop_server();
+
         return 0;
     }
 
 private:
 
-
+    Clock endtimer;
     bool OnUpdate() {
         Clock::sleepMilliseconds(15);
 
+
+        if(endtimer.getSeconds() > 900) return false;
 
         return true;
     }

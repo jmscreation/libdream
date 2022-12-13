@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="source">
+      <UniqueIdentifier>{3a35749b-9402-4fe1-9a94-6101036dd594}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{588717a5-4fff-4941-a6be-7608340f5765}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="test">
+      <UniqueIdentifier>{78a76e22-d461-430e-bdbb-158f90dc9f2e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\dream_block.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dream_client_object.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dream_clock.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dream_server.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ip_tools.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\libdream.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="test\test-dual.cpp">
+      <Filter>test</Filter>
+    </ClCompile>
+    <ClCompile Include="test\clock.cpp">
+      <Filter>test</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="test\clock.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_blob.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_blobbox.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_block.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_client.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_client_object.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_clock.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_command.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_protocol.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_server.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ip_tools.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\lib_cereal.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libdream.h">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
