@@ -57,10 +57,12 @@ class Server {
 
 public:
     Server();
-    ~Server();
+    virtual ~Server();
 
     bool start_server(short port, const std::string& ip = "");
     void stop_server();
+
+    Block& get_block() { return blobdata; }
 };
 
 

@@ -62,15 +62,23 @@ private:
 class TestClient {
     std::string ip;
     int port;
+    dream::Client client;
 
 public:
-    TestClient(const std::string& ipaddr, int port=55883): ip(ipaddr), port(port) {
+    TestClient(const std::string& ipaddr, int port=5050): ip(ipaddr), port(port) {
 
     }
 
     int RunClient() {
 
+        if(!client.start_client(port, ip)) {
+            std::cout << "error connecting to server\n";
+            return 1;
+        }
+
         while(OnUpdate());
+
+        client.stop_client();
 
         return 0;
     }

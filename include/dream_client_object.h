@@ -8,30 +8,41 @@
 #include <string>
 #include <atomic>
 #include <list>
+#include <queue>
+
+constexpr size_t MAX_PAYLOAD_SIZE = 1024 * 1024 * 64; // fixed cache for incoming data
 
 namespace dream {
 
 class ClientObject {
+    static std::atomic<uint64_t> _hook_id_counter;
+
     asio::io_context& ctx;
     asio::ip::tcp::socket socket;
 
     uint64_t id;
     std::string name;
+    size_t consecutiveErrors;
 
     std::atomic_bool server_authorized, authorizing, valid;
     char authbuf[16] {}; // small buffer for authorization
+    alignas(uint32_t) char cmdbuf[4]; // buffer for new incoming command data length data
 
-    std::mutex outgoing_command_lock, shutdown_lock;
+    std::mutex outgoing_command_lock, shutdown_lock, runtime_command_lock;
     std::list<std::stringstream> out_data; // buffers for outgoing data
-    
+    char* in_data; // memory buffer for incoming data
+    std::stringstream in_payload; // cache buffer for large payloads
+    std::queue<Command> in_commands; // commands that are ready for processing
+
     // client hooks
-    std::function<void(ClientObject&)> on_authorized, on_disconnected;
+    using HookCallback = std::function<void(ClientObject&, const std::any& data)>;
+
+    std::map<std::string, std::map<uint64_t, HookCallback>> cb_hooks;
 
 public:
     ClientObject(asio::io_context& ctx, asio::ip::tcp::socket&& soc, uint64_t id, std::string name):
-        ctx(ctx), socket(std::move(soc)), id(id), name(name),
-        server_authorized(false), authorizing(false), valid(true),
-        on_authorized([](ClientObject&){}), on_disconnected([](ClientObject&){}) {}
+        ctx(ctx), socket(std::move(soc)), id(id), name(name), consecutiveErrors(0),
+        server_authorized(false), authorizing(false), valid(true), in_data(new char[MAX_PAYLOAD_SIZE]) {}
 
     ~ClientObject();
 
@@ -51,11 +62,18 @@ public:
     size_t get_id() { return id; }
     std::string get_name() { return name; }
 
+    uint64_t register_hook(const std::string& hook_name, HookCallback hook);
+    void unregister_hook(uint64_t id);
+
 private:
-    bool incoming_data_handle();
-    bool outgoing_data_handle();
+    void incoming_command_handle(); // Command length payloads are async-retrieved via this basic retrieve method
+    void incoming_data_handle(size_t length); // Command data payloads are async-retrieved via this basic retrieve method
 
     void process_command(Command& cmd);
+
+    bool internal_error_check(const asio::error_code& error);
+
+    void trigger_hook(const std::string& hook_name, const std::any& data = {});
 
 public:
     template<typename Archive>

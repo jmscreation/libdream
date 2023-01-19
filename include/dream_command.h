@@ -11,10 +11,12 @@ class Command {
 public:
 
     enum Type : uint16_t {
-        PING, RESPONSE, TEST
+        NILL, PING, RESPONSE, TEST, INHERITED
     } type;
 
     std::string data;
+
+    virtual ~Command() = default; // inherit for user custom Command types
 
     Command() = default;
     Command(Type type): type(type) {}

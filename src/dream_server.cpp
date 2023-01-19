@@ -27,10 +27,12 @@ void Server::start_runtime() {
         auto& b = blobdata.insert_blob<std::string>("test_blob", "");
         std::cout << "Preset Data: " << b.get() << "\n";
 
+        *b = "this is test data\n";
+
         runtime_handle = std::thread([this](){
             runtime_running = true;
             while(runtime_running){
-                Clock::sleepMilliseconds(100); // server runtime has 2ms delay
+                Clock::sleepMilliseconds(2.0); // server runtime has 2ms delay
                 {
                     std::scoped_lock lock(runtime_lock);
                     server_runtime();
@@ -103,7 +105,7 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
     std::cout << "new client socket id=" << cur_uuid << "\n";
     clients.insert_or_assign(
                                 cur_uuid,
-                                std::make_unique<ClientObject>(ctx, std::move(soc), cur_uuid, std::string("Client ") + std::to_string(cur_uuid))
+                                std::make_unique<ClientObject>(ctx, std::move(soc), cur_uuid, std::to_string(cur_uuid))
                             );
 }
 
@@ -141,11 +143,14 @@ void Server::server_runtime() { // check for and remove invalid clients
         ping_timeout.restart();
     }
 
+    std::erase_if(clients, [](const auto& p) -> bool { return !p.second; }); // remove nullptr from clients
 }
 
 // Async Loopbacks
 
 void Server::do_accept() {
+    if(!listener.is_open()) return;
+
     listener.async_accept([this](std::error_code er, asio::ip::tcp::socket soc){
         if(!listener.is_open()) return; // listener shutdown
 
