@@ -21,7 +21,7 @@ bool ClientObject::send_raw_data(const char* data, size_t length, std::function<
     asio::async_write(socket, buf,
         [&, length](const asio::error_code& error, size_t bytes){
             if(error){
-                if(++consecutiveErrors > 16) shutdown();
+                internal_error_check(error);
                 return 0ULL;
             }
             return length - bytes;
@@ -84,16 +84,24 @@ void ClientObject::server_authorize() {
     });
     timeout.detach();
 
-    asio::async_read(socket, asio::buffer(authbuf, sizeof(authbuf)), [&](const asio::error_code& error, size_t bytes){
+    asio::async_read(socket, asio::buffer(in_data, sizeof(DREAM_PROTO_ACCESS)), [&](const asio::error_code& error, size_t bytes){
         if(error){
-            internal_error_check(error);
+            // internal_error_check(error);
             return 0ULL;
         }
-        return sizeof(authbuf) - bytes;
+        return sizeof(DREAM_PROTO_ACCESS) - bytes;
     }, [&](const asio::error_code& error, size_t bytes){
-        if(error) return; // auth read error - no print or error handling for security
-        std::string rcv(authbuf, 5);
-        if(server_authorized = (rcv == "GET /")){ // authorized successful
+        if(error || sizeof(DREAM_PROTO_ACCESS) != bytes){
+            
+            std::cout << "temporary error: auth failed because\n";
+            if(error) std::cout << "- - error: " << error.message() << "\n";
+            if(sizeof(DREAM_PROTO_ACCESS) != bytes) std::cout << "- - size mismatch: " << sizeof(DREAM_PROTO_ACCESS) << "(real) != " << bytes << "(bytes)\n";
+
+            return; // auth read error - no print or error handling for security
+        }
+        std::string rcv(in_data, bytes);
+        std::string rdx(DREAM_PROTO_ACCESS, sizeof(DREAM_PROTO_ACCESS));
+        if(server_authorized = (rcv == rdx)){ // authorized successful
             authorizing = false;
             trigger_hook("on_authorized");
             incoming_command_handle(); // begin incoming data stream
@@ -102,8 +110,7 @@ void ClientObject::server_authorize() {
 }
 
 void ClientObject::client_authorize() {
-    memcpy(authbuf, "GET /", 5); // temporary authorization code -- this code lets a browser client connect
-    send_raw_data(authbuf, sizeof(authbuf), [&](bool success){
+    send_raw_data(DREAM_PROTO_ACCESS, sizeof(DREAM_PROTO_ACCESS), [&](bool success){
         if(success){
             server_authorized = true;
             trigger_hook("on_authorized"); // for now authorize the client connection immediately after sending the data
@@ -141,7 +148,6 @@ void ClientObject::incoming_command_handle() {
 
     asio::async_read(socket, asio::buffer(cmdbuf, sizeof(cmdbuf)), [&](const asio::error_code& error, size_t bytes){
         if(error){
-            std::cout << error.message() << "\n";
             internal_error_check(error);
             return 0ULL;
         }

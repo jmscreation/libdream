@@ -61,7 +61,7 @@ public:
 
     template<class Archive>
     void serialize(Archive& archive) {
-        archive(*data);
+        archive(id.value(), *data);
     }
 
 };

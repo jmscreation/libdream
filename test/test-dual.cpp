@@ -47,12 +47,10 @@ public:
 
 private:
 
-    Clock endtimer;
     bool OnUpdate() {
         Clock::sleepMilliseconds(15);
 
-
-        if(endtimer.getSeconds() > 900) return false;
+        if(!server.is_running()) return false;
 
         return true;
     }
@@ -76,6 +74,9 @@ public:
             return 1;
         }
 
+        Clock timeout;
+        while(!client.is_connected() && timeout.getSeconds() < 6.0);
+
         while(OnUpdate());
 
         client.stop_client();
@@ -86,6 +87,8 @@ public:
 private:
     bool OnUpdate() {
         Clock::sleepMilliseconds(15);
+
+        if(!client.is_running() || !client.is_connected()) return false;
 
         return true;
     }

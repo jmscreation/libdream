@@ -39,6 +39,9 @@ public:
     bool start_client(short port, const std::string& ip = "", const std::string& name = "NoName");
     void stop_client();
 
+    bool is_running() { return runtime_running; }
+    bool is_connected() { return server && server->is_valid() && server->is_authorized(); }
+
     Block& get_block() { return blobdata; }
 };
 

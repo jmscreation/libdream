@@ -62,6 +62,8 @@ public:
     bool start_server(short port, const std::string& ip = "");
     void stop_server();
 
+    bool is_running() { return runtime_running; }
+
     Block& get_block() { return blobdata; }
 };
 

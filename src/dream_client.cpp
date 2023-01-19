@@ -16,6 +16,8 @@ void Client::start_context_handle() {
 
 void Client::start_runtime() {
     if(!runtime_running){
+
+        // Test Blob for receiving Test Data from server
         auto& b = blobdata.insert_blob<std::string>("test_blob", "");
 
         runtime_handle = std::thread([this](){
@@ -57,8 +59,8 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
             asio::ip::tcp::socket soc(ctx);
             soc.open(endpoint.protocol());
             soc.set_option(asio::ip::tcp::no_delay(true));
-            soc.set_option(asio::detail::socket_option::integer<SOL_SOCKET, SO_RCVTIMEO>{ 8000 });
-            soc.set_option(asio::detail::socket_option::integer<SOL_SOCKET, SO_SNDTIMEO>{ 8000 });
+            // soc.set_option(asio::detail::socket_option::integer<SOL_SOCKET, SO_RCVTIMEO>{ 8000 });
+            // soc.set_option(asio::detail::socket_option::integer<SOL_SOCKET, SO_SNDTIMEO>{ 8000 });
             soc.connect(endpoint);
 
             server = std::make_unique<ClientObject>(ctx, std::move(soc), 0, name);
@@ -75,6 +77,7 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
 
     std::cout << "connected to server\n"; // temporary debug
 
+    // Test Hook Registered to catch Test Data from server
     server->register_hook("pre_command", [&](ClientObject& server, const std::any& data){
         const Command& cmd = std::any_cast<const Command&>(data);
 
@@ -83,7 +86,7 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
             {
                 std::stringstream raw(cmd.data);
                 cereal::BinaryInputArchive convert(raw);
-                convert(*b);
+                convert(b);
             }
 
             std::cout << "Blob data:" << b.get() << "\n";
@@ -97,6 +100,14 @@ void Client::stop_client() {
     ctx.stop();
 
     stop_runtime();
+
+    server.reset();
+    while(!ctx.stopped());
+    ctx.reset();
+
+    if(ctx_handle.joinable()){
+        ctx_handle.join();
+    }
 }
 
 

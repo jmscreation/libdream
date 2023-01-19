@@ -24,10 +24,10 @@ void Server::reset_listener() {
 
 void Server::start_runtime() {
     if(!runtime_running){
-        auto& b = blobdata.insert_blob<std::string>("test_blob", "");
-        std::cout << "Preset Data: " << b.get() << "\n";
 
-        *b = "this is test data\n";
+        // Test Data
+        auto& b = blobdata.insert_blob<std::string>("test_blob", "");
+        *b += "this is test data\n";
 
         runtime_handle = std::thread([this](){
             runtime_running = true;
@@ -76,7 +76,6 @@ bool Server::start_server(short port, const std::string& ip) {
 
     start_context_handle();
     start_runtime();
-
 
     return true;
 }
@@ -137,8 +136,11 @@ void Server::server_runtime() { // check for and remove invalid clients
             if(!client->is_valid() || !client->is_authorized()) continue;
 
             client->send_command(Command(Command::PING));
-            auto& blob = blobdata.get_blob<std::string>("test_blob");
-            client->send_command(Command(Command::TEST, blob));
+
+            // Test Data
+            client->send_command(Command(Command::TEST, blobdata.get_blob<std::string>("test_blob")));
+            *blobdata.get_blob<std::string>("test_blob") += "_______added-data**" + std::to_string(rand() % 1000000) + "**";
+
         }
         ping_timeout.restart();
     }
