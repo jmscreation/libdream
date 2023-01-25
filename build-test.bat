@@ -28,7 +28,7 @@ set LINK_ONLY=0
 set SOURCE_DIRECTORIES=src test
 set INCLUDE_DIRECTORIES=include test
 set LIBRARY_DIRECTORIES=libraries/libasio-main libraries/cereal-master
-set LIBRARY_NAMES=ws2_32 wsock32
+set LIBRARY_NAMES=ws2_32 wsock32 pthread
 
 
 :: Additional Compiler Flags And Configuration Settings
@@ -39,7 +39,7 @@ set OBJECT_DIRECTORY=.objs
 
 :: Advanced / Extra Command Line Settings For Building / Linking
 set ADDITIONAL_INCLUDEDIRS=
-set ADDITIONAL_LIBRARIES=-static-libstdc++ -static-libgcc
+set ADDITIONAL_LIBRARIES=-static-libstdc++ -static-libgcc -static
 set ADDITIONAL_LIBDIRS=
 
 

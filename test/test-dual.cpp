@@ -48,7 +48,7 @@ public:
 private:
 
     bool OnUpdate() {
-        Clock::sleepMilliseconds(15);
+        Clock::sleepMilliseconds(10);
 
         if(!server.is_running()) return false;
 
@@ -77,7 +77,14 @@ public:
         Clock timeout;
         while(!client.is_connected() && timeout.getSeconds() < 6.0);
 
-        while(OnUpdate());
+        Clock fpsT;
+        double fps;
+        while(OnUpdate()){
+            fps = 1.0 / fpsT.getSeconds();
+            fpsT.restart();
+
+            std::cout << "                          \r" << std::setprecision(3) << fps;
+        }
 
         client.stop_client();
 
@@ -86,9 +93,15 @@ public:
 
 private:
     bool OnUpdate() {
-        Clock::sleepMilliseconds(15);
+        Clock::sleepMilliseconds(5);
 
         if(!client.is_running() || !client.is_connected()) return false;
+
+        static std::vector<std::string> list = {
+            "this is test data", "chunk of data", "something", "more data as a string placed here",
+            "large piece of data:" + std::string(100000, 'x')};
+
+        client.send_string(list.at(rand() % list.size()));
 
         return true;
     }

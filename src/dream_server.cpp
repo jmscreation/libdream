@@ -1,5 +1,6 @@
 #include "libdream.h"
 #include <algorithm>
+#include <iomanip>
 namespace dream {
 
 Server::Server(): idle(ctx), listener(ctx), header({}), cur_uuid(1), runtime_running(false) {}
@@ -24,15 +25,10 @@ void Server::reset_listener() {
 
 void Server::start_runtime() {
     if(!runtime_running){
-
-        // Test Data
-        auto& b = blobdata.insert_blob<std::string>("test_blob", "");
-        *b += "this is test data\n";
-
         runtime_handle = std::thread([this](){
             runtime_running = true;
             while(runtime_running){
-                Clock::sleepMilliseconds(2.0); // server runtime has 2ms delay
+                Clock::sleepMilliseconds(2); // server runtime has 2ms delay
                 {
                     std::scoped_lock lock(runtime_lock);
                     server_runtime();
@@ -77,6 +73,8 @@ bool Server::start_server(short port, const std::string& ip) {
     start_context_handle();
     start_runtime();
 
+    std::cout << "server started\n";
+
     return true;
 }
 
@@ -101,11 +99,31 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
     std::scoped_lock lock(accept_lock);
     while(clients.count(cur_uuid)) ++cur_uuid; // find a free uuid
 
-    std::cout << "new client socket id=" << cur_uuid << "\n";
-    clients.insert_or_assign(
+    std::cout << "new client [" << cur_uuid << "]\n";
+    auto& c = clients.insert_or_assign(
                                 cur_uuid,
                                 std::make_unique<ClientObject>(ctx, std::move(soc), cur_uuid, std::to_string(cur_uuid))
-                            );
+                            ).first->second;
+    // TEST and DEBUG
+    static Clock tc;
+    static size_t msgs = 0;
+
+    c->register_global_hook([](ClientObject& client, const std::string& hook, const std::any& data) -> bool {
+        if(hook == "pre_command"){
+            const Command& cmd = std::any_cast<Command>(data);
+            if(cmd.type == Command::STRING){
+                msgs++;
+                std::cout << "                 \r" << (double(msgs) / tc.getSeconds()) << " packages per second";
+            }
+
+            if(cmd.type == Command::RESPONSE){
+                msgs = 0;
+                tc.restart();
+            }
+        }
+
+        return true;
+    });
 }
 
 
@@ -136,11 +154,6 @@ void Server::server_runtime() { // check for and remove invalid clients
             if(!client->is_valid() || !client->is_authorized()) continue;
 
             client->send_command(Command(Command::PING));
-
-            // Test Data
-            client->send_command(Command(Command::TEST, blobdata.get_blob<std::string>("test_blob")));
-            *blobdata.get_blob<std::string>("test_blob") += "_______added-data**" + std::to_string(rand() % 1000000) + "**";
-
         }
         ping_timeout.restart();
     }

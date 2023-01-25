@@ -43,6 +43,8 @@ public:
     bool is_connected() { return server && server->is_valid() && server->is_authorized(); }
 
     Block& get_block() { return blobdata; }
+
+    void send_string(const std::string& data);
 };
 
 

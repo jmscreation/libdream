@@ -16,14 +16,10 @@ void Client::start_context_handle() {
 
 void Client::start_runtime() {
     if(!runtime_running){
-
-        // Test Blob for receiving Test Data from server
-        auto& b = blobdata.insert_blob<std::string>("test_blob", "");
-
         runtime_handle = std::thread([this](){
             runtime_running = true;
             while(runtime_running){
-                Clock::sleepMilliseconds(2.0); // client runtime has 2ms delay
+                Clock::sleepMilliseconds(2); // client runtime has 2ms delay
                 {
                     std::scoped_lock lock(runtime_lock);
                     client_runtime(); // invoke runtime update
@@ -77,22 +73,6 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
 
     std::cout << "connected to server\n"; // temporary debug
 
-    // Test Hook Registered to catch Test Data from server
-    server->register_hook("pre_command", [&](ClientObject& server, const std::any& data){
-        const Command& cmd = std::any_cast<const Command&>(data);
-
-        if(cmd.type == Command::TEST){
-            auto& b = blobdata.get_blob<std::string>("test_blob");
-            {
-                std::stringstream raw(cmd.data);
-                cereal::BinaryInputArchive convert(raw);
-                convert(b);
-            }
-
-            std::cout << "Blob data:" << b.get() << "\n";
-        }
-    });
-
     return true;
 }
 
@@ -126,5 +106,8 @@ void Client::client_runtime() { // check for and remove invalid clients
 
 }
 
+void Client::send_string(const std::string& data) {
+    server->send_command(Command(Command::STRING, data));
+}
 
 }

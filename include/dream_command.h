@@ -11,7 +11,7 @@ class Command {
 public:
 
     enum Type : uint16_t {
-        NILL, PING, RESPONSE, TEST, INHERITED
+        NILL, PING, RESPONSE, TEST, STRING, INHERITED
     } type;
 
     std::string data;

@@ -51,7 +51,7 @@ class Server {
     void new_client_socket(asio::ip::tcp::socket&& soc);
 
     // asynchronous loop backs
-    std::mutex accept_lock; // acceptor mutex
+    std::mutex accept_lock; // acceptor mutex - protect clients map from race
 
     void do_accept();
 
@@ -65,6 +65,8 @@ public:
     bool is_running() { return runtime_running; }
 
     Block& get_block() { return blobdata; }
+
+    size_t get_client_count() { std::scoped_lock lock(accept_lock); return clients.size(); }
 };
 
 
