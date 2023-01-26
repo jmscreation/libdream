@@ -59,7 +59,7 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
             // soc.set_option(asio::detail::socket_option::integer<SOL_SOCKET, SO_SNDTIMEO>{ 8000 });
             soc.connect(endpoint);
 
-            server = std::make_unique<ClientObject>(ctx, std::move(soc), 0, name);
+            server = generate_server_object(std::move(soc), 0, name);
 
             break;
         } catch(...) {
@@ -106,8 +106,23 @@ void Client::client_runtime() { // check for and remove invalid clients
 
 }
 
+User Client::get_server_user() {
+    User user(this);
+    user.uuid = server->get_id();
+    user.name = server->get_name();
+    return user;
+}
+
 void Client::send_string(const std::string& data) {
     server->send_command(Command(Command::STRING, data));
 }
+
+
+// Misc
+
+std::unique_ptr<ClientObject> Client::generate_server_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name) {
+    return std::unique_ptr<ClientObject>( new ClientObject(ctx, std::move(soc), cur_uuid, std::to_string(cur_uuid)) );
+}
+
 
 }

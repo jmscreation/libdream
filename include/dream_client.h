@@ -24,6 +24,8 @@ class Client {
     void start_runtime();
     void stop_runtime();
 
+    std::unique_ptr<ClientObject> generate_server_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name);
+
     // client runtime
     std::mutex runtime_lock; // runtime mutex
     void client_runtime();
@@ -44,7 +46,11 @@ public:
 
     Block& get_block() { return blobdata; }
 
+    User get_server_user();
+
     void send_string(const std::string& data);
+
+    friend class User;
 };
 
 

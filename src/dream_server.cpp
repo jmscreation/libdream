@@ -92,6 +92,27 @@ void Server::stop_server() {
     }
 }
 
+void Server::broadcast_string(const std::string& data) {
+    std::scoped_lock lock(accept_lock);
+
+    for(auto& [id,client] : clients){
+        client->send_command(Command(Command::STRING, data));
+    }
+}
+
+std::vector<User> Server::get_client_list() {
+    std::vector<User> list;
+
+    std::scoped_lock lock(accept_lock);
+
+    for(auto& [id, client] : clients){
+        User& user = list.emplace_back(this);
+        user.uuid = id;
+        user.name = client->get_name();
+    }
+
+    return list;
+}
 
 // Callbacks
 
@@ -102,27 +123,18 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
     std::cout << "new client [" << cur_uuid << "]\n";
     auto& c = clients.insert_or_assign(
                                 cur_uuid,
-                                std::make_unique<ClientObject>(ctx, std::move(soc), cur_uuid, std::to_string(cur_uuid))
+                                generate_client_object(std::move(soc), cur_uuid, "NoName")
                             ).first->second;
-    // TEST and DEBUG
-    static Clock tc;
-    static size_t msgs = 0;
 
-    c->register_global_hook([](ClientObject& client, const std::string& hook, const std::any& data) -> bool {
-        if(hook == "pre_command"){
-            const Command& cmd = std::any_cast<Command>(data);
-            if(cmd.type == Command::STRING){
-                msgs++;
-                std::cout << "                 \r" << (double(msgs) / tc.getSeconds()) << " packages per second";
-            }
+    // register the on_authorized callback
+    c->register_hook("on_authorized", [this](ClientObject& client, const std::any& data){
+        if(on_client_join){
+            User user(this);
+            user.uuid = client.get_id();
+            user.name = client.get_name();
 
-            if(cmd.type == Command::RESPONSE){
-                msgs = 0;
-                tc.restart();
-            }
+            on_client_join(user);
         }
-
-        return true;
     });
 }
 
@@ -130,35 +142,34 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
 void Server::server_runtime() { // check for and remove invalid clients
     std::scoped_lock lock(accept_lock);
 
-    for(auto& [id, client] : clients){
-        if(!client) continue;
+    for(auto it = clients.begin(); it != clients.end(); ++it){
+        auto& [id, client] = *it;
+
         if(!client->is_valid()){
             std::cout << client->get_name() << " disconnected\n";
-            client.reset();
+            expired_clients.emplace_back(std::move(client)); // move expired client to gc
+            it = clients.erase(it); // remove and continue
+            if(it == clients.end()) break;
+            --it;
+            continue;
+
         } else if(!client->is_authorized()) {
             client->server_authorize();
+
         } else {
             client->runtime_update();
         }
     }
 
     if(ping_timeout.getSeconds() > 10){
-        for(auto it = clients.begin(); it != clients.end(); ++it){
-            if(!it->second.get()){
-                clients.erase(it);
-                it = clients.begin(); // reset iterator - less efficient, but simple
-                if(it == clients.end()) break;
-            }
-        }
         for(auto& [id, client] : clients){
-            if(!client->is_valid() || !client->is_authorized()) continue;
+            if(!client->is_authorized()) continue;
 
             client->send_command(Command(Command::PING));
         }
+        expired_clients.clear(); // expired client cleanup
         ping_timeout.restart();
     }
-
-    std::erase_if(clients, [](const auto& p) -> bool { return !p.second; }); // remove nullptr from clients
 }
 
 // Async Loopbacks
@@ -180,6 +191,12 @@ void Server::do_accept() {
 
         do_accept();
     });
+}
+
+// Misc
+
+std::unique_ptr<ClientObject> Server::generate_client_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name) {
+    return std::unique_ptr<ClientObject>( new ClientObject(ctx, std::move(soc), cur_uuid, std::to_string(cur_uuid)) );
 }
 
 

@@ -6,7 +6,7 @@ bool stoip(const std::string& str, asio::ip::address& ipaddr) {
     try { // try for ip address
         ipaddr = asio::ip::address::from_string(str); // ip address
         return true;
-    } catch(asio::system_error err) {} // not an ip address
+    } catch(...) {} // not an ip address
 
     asio::io_context context; // temporary context
 
@@ -22,7 +22,7 @@ bool stoip(const std::string& str, asio::ip::address& ipaddr) {
                 return true;
             }
         }
-    } catch(std::system_error err) {} // not a hostname
+    } catch(...) {} // not a hostname
 
     return false;
 }
@@ -41,7 +41,7 @@ bool getIpv4Address(std::vector<asio::ip::address>& addrList) {
             }
         }
         return true;
-    } catch(std::exception err) {}
+    } catch(...) {}
 
     return false;
 }

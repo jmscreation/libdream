@@ -1,5 +1,4 @@
 #include "libdream.h"
-#include "clock.h"
 
 #include <iostream>
 #include <algorithm>
@@ -32,6 +31,7 @@ public:
     TestServer() {}
 
     int RunServer() {
+        server.on_client_join = std::bind(&OnClientConnect, this, std::placeholders::_1);
 
         if(!server.start_server(5050)){
             std::cout << "error starting server\n";
@@ -48,11 +48,52 @@ public:
 private:
 
     bool OnUpdate() {
-        Clock::sleepMilliseconds(10);
+        dream::Clock::sleepMilliseconds(10);
 
         if(!server.is_running()) return false;
 
+        static std::vector<std::string> list = {
+            "this is test data", "chunk of data", "something", "more data as a string placed here",
+            "large piece of data:" + std::string(100000, 'x')};
+
+        
+        if(server.get_client_count() > 0){
+            auto clients = server.get_client_list();
+            for(dream::User& user : clients){
+                user.send_string(list.at(rand() % list.size()));
+            }
+        }
+
+        // server.broadcast_string();
+
         return true;
+    }
+
+    void OnClientConnect(dream::User& user) {
+        using namespace dream;
+
+        std::cout << "User connected: " << user.get_name() << "\n";
+
+        // TEST and DEBUG
+        static Clock tc;
+        static std::atomic<size_t> msgs = 0;
+
+        user.register_global_hook([&](User client, const std::string& hook, const std::any& data) -> bool {
+            if(hook == "pre_command"){
+                const Command& cmd = std::any_cast<Command>(data);
+                if(cmd.type == Command::STRING){
+                    msgs++;
+                    std::cout << "                 \r" << (double(msgs) / tc.getSeconds()) << " packages per second";
+                }
+
+                if(cmd.type == Command::RESPONSE){
+                    msgs = 0;
+                    tc.restart();
+                }
+            }
+
+            return true;
+        });
     }
 };
 
@@ -74,10 +115,10 @@ public:
             return 1;
         }
 
-        Clock timeout;
+        dream::Clock timeout;
         while(!client.is_connected() && timeout.getSeconds() < 6.0);
 
-        Clock fpsT;
+        dream::Clock fpsT;
         double fps;
         while(OnUpdate()){
             fps = 1.0 / fpsT.getSeconds();
@@ -93,7 +134,7 @@ public:
 
 private:
     bool OnUpdate() {
-        Clock::sleepMilliseconds(5);
+        dream::Clock::sleepMilliseconds(5);
 
         if(!client.is_running() || !client.is_connected()) return false;
 
@@ -111,6 +152,9 @@ private:
 
 
 using ArgumentList = const std::vector<std::string>&;
+
+namespace entry {
+
 
 struct Command {
     std::string description, help;
@@ -201,7 +245,14 @@ bool HasArgument(const std::string& name) {
     return std::find(arguments.begin(), arguments.end(), name) != arguments.end();
 }
 
+
+}
+
+
+
 int main(int argc, char* argv[]) {
+    using namespace entry;
+
     for(int i=1; i < argc; ++i){
         arguments.emplace_back(argv[i]);
     }

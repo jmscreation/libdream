@@ -11,6 +11,17 @@ namespace dream {
 ClientObject::~ClientObject() {
     shutdown();
     delete[] in_data;
+
+    Clock::sleepMilliseconds(30); // guarantee time for semaphore access - don't question it
+
+    Clock warning;
+    while(external_lock > 0){
+        if(warning.getSeconds() > 15){
+            std::cout << "Warning: external_lock was never released for object " << id << "\n";
+            break;
+        }
+        Clock::sleepMilliseconds(100);
+    }
 }
 
 // very low level interface for sending out data asynchronously - this is not to be used externally
@@ -39,13 +50,14 @@ bool ClientObject::send_raw_data(const char* data, size_t length, std::function<
     return true;
 }
 
+// append a new command to the package payload - remember to flush the payload buffer to send the data
 void ClientObject::append_command_package(Command&& cmd) {
     std::scoped_lock lock(outgoing_command_lock);
 
     std::stringstream raw;
 
     auto beg = raw.tellp(); // prepare for overwritten length
-    for(int i=0; i < sizeof(cmdbuf); ++i){
+    for(uint32_t i=0; i < sizeof(cmdbuf); ++i){
         raw.write("\0", 1); // length reservation
     }
 
@@ -67,24 +79,35 @@ void ClientObject::append_command_package(Command&& cmd) {
     raw.write(reinterpret_cast<const char*>(&plength), sizeof(plength)); // overwrite the payload length
     raw.seekg(0, std::ios::beg); // read from beginning
 
-    out_payload << raw.rdbuf(); // append to payload cache
-
-    if(flush_command_package()){
-        out_payload.str(""); // clear command payload cache for fresh data for next flush (new data will not make this flush)
+    {
+        out_payload << raw.rdbuf(); // append to payload cache
     }
+}
+
+size_t ClientObject::check_command_package() {
+    return size_t(out_payload.tellp());
 }
 
 bool ClientObject::flush_command_package() {
     if(!out_payload_protection.try_acquire()) return false;
 
-    std::swap(out_data, out_payload); // cache buffer swaps for fast performance
+    {
+        std::swap(out_payload_flushing, out_payload); // cache buffer swaps for fast performance
+        out_payload.str(""); // clear next payload cache for fresh data for next flush
+    }
 
     // This is a C++20 hack that essentially gets a read-only const char* + length buffer view of the stringstream;
     //  It is extremely important that the stringstream object will never change after these pointer values are captured
-    send_raw_data(out_data.view().data(), out_data.view().length(), [this](bool success){
-        if(!success) std::cout << "there was an internal send failure\n";
-        out_payload_protection.release();
-    });
+
+    const char* data = out_payload_flushing.view().data(); // current payload flushing cache buffer as a raw buffer
+    size_t length = out_payload_flushing.view().length(); // calculate the length of the flush buffer
+
+    if(length > 0){ // let's never send nothing
+        if(!send_raw_data(data, length, [this](bool success){
+            if(!success) std::cout << "there was an internal send failure\n";
+            out_payload_protection.release();
+        })) out_payload_protection.release(); // whow - release this lock on error
+    }
 
     return true;
 }
@@ -111,7 +134,6 @@ void ClientObject::server_authorize() {
 
     asio::async_read(socket, asio::buffer(in_data, sizeof(DREAM_PROTO_ACCESS)), [&](const asio::error_code& error, size_t bytes){
         if(error){
-            // internal_error_check(error);
             return 0ULL;
         }
         return sizeof(DREAM_PROTO_ACCESS) - bytes;
@@ -121,25 +143,27 @@ void ClientObject::server_authorize() {
         }
         std::string rcv(in_data, bytes);
         std::string rdx(DREAM_PROTO_ACCESS, sizeof(DREAM_PROTO_ACCESS));
-        if(server_authorized = (rcv == rdx)){ // authorized successful
+        if( (server_authorized = (rcv == rdx)) ){ // authorized successful
             authorizing = false;
             trigger_hook("on_authorized");
             incoming_command_handle(); // begin incoming data stream
-            // debug_log.open("client_" + std::to_string(id) + ".log", std::ios::out);
         }
     });
 }
 
 void ClientObject::client_authorize() {
     for(int i=0; i < 4 && // retry 3 times
-        !send_raw_data(DREAM_PROTO_ACCESS, sizeof(DREAM_PROTO_ACCESS), [&](bool success){
-            if(success){
-                server_authorized = true;
-                trigger_hook("on_authorized"); // for now authorize the client connection immediately after sending the data
-                reset_and_receive_data(); // begin incoming data stream
-                // debug_log_s.open("client.log", std::ios::out);
-            }
-        }); ++i) Clock::sleepSeconds(1); // 1 second timeout
+        (
+            !out_payload_protection.try_acquire() ||
+            !send_raw_data(DREAM_PROTO_ACCESS, sizeof(DREAM_PROTO_ACCESS), [this](bool success){
+                if(success){
+                    server_authorized = true;
+                    trigger_hook("on_authorized"); // for now authorize the client connection immediately after sending the data
+                    reset_and_receive_data(); // begin incoming data stream
+                }
+                out_payload_protection.release();
+            })
+        ); ++i) Clock::sleepSeconds(1); // 1 second timeout
 }
 
 void ClientObject::runtime_update() {
@@ -176,14 +200,13 @@ void ClientObject::reset_and_receive_data() {
 
 void ClientObject::incoming_command_handle() {
     if (!in_payload_protection.try_acquire()) {
-        std::cout << "A serious warning is issued:\nThe incoming data handler was called at an invalid time!\n";
+        std::cout << "A serious error has occurred:\nThe incoming data handler was called at an invalid time!\n";
         return;
     }
 
     in_payload.str(""); // clear the payload buffer
     asio::async_read(socket, asio::buffer(cmdbuf, sizeof(cmdbuf)), [this](const asio::error_code& error, size_t bytes){
         if(error){
-            debug_log << "\terror: failed to load some bytes: " << error.message() << "\n";
             if(!internal_error_check(error)) return 0ULL;
         }
         return sizeof(cmdbuf) - bytes;
@@ -206,7 +229,6 @@ void ClientObject::incoming_command_handle() {
 void ClientObject::incoming_data_handle(size_t length) {
     size_t overflow = length > MAX_PAYLOAD_SIZE ? length - MAX_PAYLOAD_SIZE : 0;
 
-    debug_log << "expect " << (length - overflow) << " bytes...\n";
     asio::async_read(socket, asio::buffer(in_data, length - overflow), [this, length, overflow](const asio::error_code& error, size_t bytes){
         if(error){
             std::cout << error.message() << "\n";
@@ -215,7 +237,6 @@ void ClientObject::incoming_data_handle(size_t length) {
         return length - overflow - bytes;
     }, [this, length, overflow](const asio::error_code& error, size_t bytes) mutable {
         if(error){
-            debug_log << "\tError: async_read() failed - " << error.message() << "\n";
             std::cout << error.message() << "\n";
             if(internal_error_check(error)) reset_and_receive_data();
         } else {
@@ -234,7 +255,6 @@ void ClientObject::incoming_data_handle(size_t length) {
                         in_commands.emplace(std::move(cmd));
                     }
                 } catch(cereal::Exception e){
-                    debug_log << "\tcaught exception: " << e.what() << "\n";
                     std::cout << "\tcaught exception: " << e.what() << "\n";
                 }
                 reset_and_receive_data();
@@ -260,8 +280,16 @@ void ClientObject::process_command(Command& cmd) {
         case Command::PING:
         {
             out_commands.emplace(Command(Command::RESPONSE));
+            break;
         }
-        break;
+        case Command::RESPONSE:
+        {
+            break;
+        }
+        default:
+        {
+            break;
+        }
     }
 
     trigger_hook("post_command", cmd);
@@ -276,8 +304,14 @@ void ClientObject::process_incoming_commands() {
 }
 
 void ClientObject::process_outgoing_commands() {
+    bool flush = false;
     for(; !out_commands.empty(); out_commands.pop()){
         append_command_package(std::move(out_commands.front())); // move all commands into package cache
+        if(!flush) flush = true;
+    }
+
+    if(flush || check_command_package() > 0){
+        flush_command_package(); // flush out the payload stream
     }
 }
 
@@ -326,19 +360,34 @@ void ClientObject::unregister_hook(uint64_t id) {
 }
 
 void ClientObject::trigger_hook(const std::string& hook_name, const std::any& data) {
-    std::scoped_lock lock(trigger_lock);
+    trigger_lock.lock();
+
+    /* due to the way triggers work, it may
+       be possible to register a trigger from inside a trigger;
+       therefore, we must manually unlock the trigger system when
+       invoking any trigger callbacks.
+    */
 
     for(auto& [id, cb] : cb_global_hooks){
+        trigger_lock.unlock();
         if(!cb(*this, hook_name, data))
             return; // check for global hook override - false return will abort remaining hook triggers
+        trigger_lock.lock();
     }
 
-    if(!cb_hooks.count(hook_name)) return;
+    if(!cb_hooks.count(hook_name)){
+        trigger_lock.unlock();
+        return;
+    }
 
     auto& hook_list = cb_hooks.at(hook_name);
     for(auto& [id, cb] : hook_list){
+        trigger_lock.unlock();
         cb(*this, data);
+        trigger_lock.lock();
     }
+
+    trigger_lock.unlock();
 }
 
 

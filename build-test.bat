@@ -20,7 +20,7 @@ set VERBOSE=0
 set AUTO_REBUILD=1
 set REBUILD_SOURCE_DIRECTORIES=1
 set REBUILD_SOURCE_LIBRARIES=0
-set ASYNC_BUILD=1
+set ASYNC_BUILD=2
 
 set LINK_ONLY=0
 
@@ -232,6 +232,9 @@ goto loop
 			echo Building %~n3_%%~nF.o
 			start /B %WAIT% "%%~nF.o" %3 %ADDITIONAL_INCLUDEDIRS% %~4 %DEBUG_INFO% -c %%F -o !OBJ_DIR!\%~n3_%%~nF.o
 
+			if %ASYNC_BUILD% EQU 2 (
+				timeout /T 1 >nul
+			)
 			if %VERBOSE% GTR 0 (
 				echo %3 %ADDITIONAL_INCLUDEDIRS% %~4 %DEBUG_INFO% -c %%F -o !OBJ_DIR!\%~n3_%%~nF.o
 			)
@@ -245,6 +248,9 @@ goto close
 			echo Building %~n3_%%~nF.res
 			start /B %WAIT% "%%~nF.res" %3 %%F -O coff -o !OBJ_DIR!\%~n3_%%~nF.res
 
+			if %ASYNC_BUILD% EQU 2 (
+				timeout /T 1 >nul
+			)
 			if %VERBOSE% GTR 0 (
 				echo %3 %%F -O coff -o !OBJ_DIR!\%~n3_%%~nF.res
 			)
