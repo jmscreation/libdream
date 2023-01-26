@@ -50,6 +50,8 @@ public:
 
     void send_string(const std::string& data);
 
+    std::function<void(User&)> on_connect; // this is temporary just so we can quickly get a callback
+
     friend class User;
 };
 
