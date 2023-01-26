@@ -50,7 +50,7 @@ class ClientObject {
     using HookCallback = std::function<void(ClientObject&, const std::any& data)>;
     using GlobalHookCallback = std::function<bool(ClientObject&, const std::string& hook, const std::any& data)>;
     
-    std::mutex trigger_lock;
+    std::recursive_mutex trigger_lock;
 
     std::map<uint64_t, GlobalHookCallback> cb_global_hooks;
     std::map<std::string, std::map<uint64_t, HookCallback>> cb_hooks;
