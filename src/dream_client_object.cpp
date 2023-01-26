@@ -11,17 +11,6 @@ namespace dream {
 ClientObject::~ClientObject() {
     shutdown();
     delete[] in_data;
-
-    Clock::sleepMilliseconds(30); // guarantee time for semaphore access - don't question it
-
-    Clock warning;
-    while(external_lock > 0){
-        if(warning.getSeconds() > 15){
-            std::cout << "Warning: external_lock was never released for object " << id << "\n";
-            break;
-        }
-        Clock::sleepMilliseconds(100);
-    }
 }
 
 // very low level interface for sending out data asynchronously - this is not to be used externally
@@ -39,7 +28,7 @@ bool ClientObject::send_raw_data(const char* data, size_t length, std::function<
         },
         [this, on_complete](const asio::error_code& error, size_t bytes){
             if(error){
-                std::cout << error.message() << "\n";
+                dlog << error.message() << "\n";
                 shutdown();
                 on_complete(false);
             } else {
@@ -70,7 +59,7 @@ void ClientObject::append_command_package(Command&& cmd) {
     uint32_t plength = raw.tellg(); // get the size of the data stream
 
     if(plength <= sizeof(plength)){
-        std::cout << "warning: skipping package due to zero length payload\n";
+        dlog << "warning: skipping package due to zero length payload\n";
         return; // something went wrong because there was no payload found
     }
     plength -= sizeof(plength); // decrement the reserved length size in the payload
@@ -104,7 +93,6 @@ bool ClientObject::flush_command_package() {
 
     if(length > 0){ // let's never send nothing
         if(!send_raw_data(data, length, [this](bool success){
-            if(!success) std::cout << "there was an internal send failure\n";
             out_payload_protection.release();
         })) out_payload_protection.release(); // whow - release this lock on error
     }
@@ -125,7 +113,7 @@ void ClientObject::server_authorize() {
     std::thread timeout([&](){
         Clock::sleepSeconds(3);
         if(!server_authorized){
-            std::cout << "invalid client - validation timeout\n";
+            dlog << "invalid client - validation timeout\n";
             shutdown();
             valid = false;
         }
@@ -178,7 +166,7 @@ void ClientObject::shutdown() {
     std::scoped_lock lock(shutdown_lock);
 
     if(socket.is_open()){
-        std::cout << name << " connection closed\n";
+        dlog << "Client " << name << " disconnected\n";
         socket.close();
         trigger_hook("on_disconnected");
     }
@@ -200,7 +188,7 @@ void ClientObject::reset_and_receive_data() {
 
 void ClientObject::incoming_command_handle() {
     if (!in_payload_protection.try_acquire()) {
-        std::cout << "A serious error has occurred:\nThe incoming data handler was called at an invalid time!\n";
+        dlog << "A serious error has occurred:\nThe incoming data handler was called at an invalid time!\n";
         return;
     }
 
@@ -212,7 +200,7 @@ void ClientObject::incoming_command_handle() {
         return sizeof(cmdbuf) - bytes;
     }, [this](const asio::error_code& error, size_t bytes){
         if(error){
-            std::cout << error.message() << "\n";
+            dlog << error.message() << "\n";
             if(internal_error_check(error)) reset_and_receive_data();
         } else {
 
@@ -231,13 +219,13 @@ void ClientObject::incoming_data_handle(size_t length) {
 
     asio::async_read(socket, asio::buffer(in_data, length - overflow), [this, length, overflow](const asio::error_code& error, size_t bytes){
         if(error){
-            std::cout << error.message() << "\n";
+            dlog << error.message() << "\n";
             if(!internal_error_check(error)) return 0ULL;
         }
         return length - overflow - bytes;
     }, [this, length, overflow](const asio::error_code& error, size_t bytes) mutable {
         if(error){
-            std::cout << error.message() << "\n";
+            dlog << error.message() << "\n";
             if(internal_error_check(error)) reset_and_receive_data();
         } else {
             in_payload.write(in_data, bytes);
@@ -255,7 +243,7 @@ void ClientObject::incoming_data_handle(size_t length) {
                         in_commands.emplace(std::move(cmd));
                     }
                 } catch(cereal::Exception e){
-                    std::cout << "\tcaught exception: " << e.what() << "\n";
+                    dlog << "\tcaught exception: " << e.what() << "\n";
                 }
                 reset_and_receive_data();
             }

@@ -73,7 +73,7 @@ bool Server::start_server(short port, const std::string& ip) {
     start_context_handle();
     start_runtime();
 
-    std::cout << "server started\n";
+    dlog << "server started\n";
 
     return true;
 }
@@ -120,7 +120,7 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
     std::scoped_lock lock(accept_lock);
     while(clients.count(cur_uuid)) ++cur_uuid; // find a free uuid
 
-    std::cout << "new client [" << cur_uuid << "]\n";
+    dlog << "new client [" << cur_uuid << "]\n";
     auto& c = clients.insert_or_assign(
                                 cur_uuid,
                                 generate_client_object(std::move(soc), cur_uuid, "NoName")
@@ -146,7 +146,7 @@ void Server::server_runtime() { // check for and remove invalid clients
         auto& [id, client] = *it;
 
         if(!client->is_valid()){
-            std::cout << client->get_name() << " disconnected\n";
+            dlog << client->get_name() << " disconnected\n";
             expired_clients.emplace_back(std::move(client)); // move expired client to gc
             it = clients.erase(it); // remove and continue
             if(it == clients.end()) break;
@@ -167,7 +167,9 @@ void Server::server_runtime() { // check for and remove invalid clients
 
             client->send_command(Command(Command::PING));
         }
-        expired_clients.clear(); // expired client cleanup
+        
+        std::erase_if(expired_clients, [](const auto& c){ return !c->has_weak_references(); }); // expired client cleanup
+
         ping_timeout.restart();
     }
 }
@@ -182,11 +184,11 @@ void Server::do_accept() {
 
         if(soc.is_open()){
             const auto& ep = soc.remote_endpoint();
-            std::cout << "connection from " << ep.address().to_string() << " : " << ep.port() << "\n";
+            dlog << "connection from " << ep.address().to_string() << " : " << ep.port() << "\n";
             soc.set_option(asio::detail::socket_option::integer<SOL_SOCKET, SO_SNDTIMEO>(5000)); // 5 second write timeout
             new_client_socket(std::move(soc));
         } else {
-            std::cout << "error accepting connection\n";
+            dlog << "error accepting connection\n";
         }
 
         do_accept();

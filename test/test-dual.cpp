@@ -34,7 +34,7 @@ public:
         server.on_client_join = std::bind(&OnClientConnect, this, std::placeholders::_1);
 
         if(!server.start_server(5050)){
-            std::cout << "error starting server\n";
+            dream::dlog << "error starting server\n";
             return 1;
         }
 
@@ -72,7 +72,7 @@ private:
     void OnClientConnect(dream::User& user) {
         using namespace dream;
 
-        std::cout << "User connected: " << user.get_name() << "\n";
+        dream::dlog << "User connected: " << user.get_name() << "\n";
 
         // TEST and DEBUG
         static Clock tc;
@@ -83,7 +83,7 @@ private:
                 const Command& cmd = std::any_cast<Command>(data);
                 if(cmd.type == Command::STRING){
                     msgs++;
-                    std::cout << "                 \r" << (double(msgs) / tc.getSeconds()) << " packages per second";
+                    dream::dlog << "                 \r" << (double(msgs) / tc.getSeconds()) << " packages per second";
                 }
 
                 if(cmd.type == Command::RESPONSE){
@@ -102,34 +102,33 @@ class TestClient {
     std::string ip;
     int port;
     dream::Client client;
+    bool terminated;
 
 public:
-    TestClient(const std::string& ipaddr, int port=5050): ip(ipaddr), port(port) {
+    TestClient(const std::string& ipaddr, int port=5050): ip(ipaddr), port(port), terminated(false) {
 
     }
 
     int RunClient() {
+        client.on_connect = std::bind(&OnConnect, this, std::placeholders::_1);
 
         if(!client.start_client(port, ip)) {
-            std::cout << "error connecting to server\n";
+            dream::dlog << "error connecting to server\n";
             return 1;
         }
 
         dream::Clock timeout;
         while(!client.is_connected() && timeout.getSeconds() < 6.0);
 
-        dream::Clock fpsT;
-        double fps;
-        while(OnUpdate()){
-            fps = 1.0 / fpsT.getSeconds();
-            fpsT.restart();
-
-            std::cout << "                          \r" << std::setprecision(3) << fps;
-        }
+        while(OnUpdate()){}
 
         client.stop_client();
 
         return 0;
+    }
+
+    bool Terminated() {
+        return terminated;
     }
 
 private:
@@ -145,6 +144,38 @@ private:
         client.send_string(list.at(rand() % list.size()));
 
         return true;
+    }
+
+    void OnConnect(dream::User& user) {
+        using namespace dream;
+
+        dream::dlog << "Connected to server\n";
+
+        // TEST and DEBUG
+        static Clock tc;
+        static std::atomic<size_t> msgs = 0;
+
+        user.register_global_hook([&](User client, const std::string& hook, const std::any& data) -> bool {
+            if(hook == "pre_command"){
+                const Command& cmd = std::any_cast<Command>(data);
+                if(cmd.type == Command::STRING){
+                    msgs++;
+                    dream::dlog << "                 \r" << (double(msgs) / tc.getSeconds()) << " packages per second";
+                }
+
+                if(cmd.type == Command::PING){
+                    msgs = 0;
+                    tc.restart();
+                }
+
+                if(cmd.type == Command::TEST){
+                    terminated = true;
+                    this->client.stop_client();
+                }
+            }
+
+            return true;
+        });
     }
 
 };
@@ -167,11 +198,11 @@ std::map<std::string, Command> commands {
         "Command to display this help menu",
         "== no arguments ==",
         [](ArgumentList args, const Command& t) -> bool {
-            std::cout << "------------------------- List Of Commands ------------------------\n";
+            dream::dlog << "------------------------- List Of Commands ------------------------\n";
             for(auto& [name, cmd] : commands){
-                std::cout << "# " << name << "\t\t" << cmd.description << " #\n";
+                dream::dlog << "# " << name << "\t\t" << cmd.description << " #\n";
             }
-            std::cout << "-------------------------------------------------------------------\n";
+            dream::dlog << "-------------------------------------------------------------------\n";
 
             return true;
         }
@@ -192,7 +223,7 @@ std::map<std::string, Command> commands {
         "Start the test client and connect to remote host",
         "ipaddr | ?port",
         [](ArgumentList args, const Command& t) -> bool {
-            TestClient* client = nullptr;
+            std::unique_ptr<TestClient> client;
             if(args.size() < 1 || args.size() > 2) return false;
 
             std::string ip = args.at(0);
@@ -200,7 +231,7 @@ std::map<std::string, Command> commands {
             {
                 asio::ip::address addr;
                 if(!stoip(ip, addr)){
-                    std::cout << "invalid ip address\n";
+                    dream::dlog << "invalid ip address\n";
                     return false;
                 }
             }
@@ -210,16 +241,21 @@ std::map<std::string, Command> commands {
                 try {
                     port = std::stoi(args.at(1));
                 } catch(std::invalid_argument e) {
-                    std::cout << "invalid argument" << "\n";
+                    dream::dlog << "invalid argument" << "\n";
                     return false;
                 }
             }
 
-            client = port ? new TestClient(ip, port) : new TestClient(ip);
-            
-            client->RunClient();
-            
-            delete client;
+            while(1){
+                client = port ? std::make_unique<TestClient>(ip, port)
+                              : std::make_unique<TestClient>(ip);
+                
+                dream::dlog << "connecting to server..." << "\n";
+                client->RunClient();
+
+                if(client->Terminated()) break;
+            }
+
             return true;
         }
     }},
@@ -261,7 +297,7 @@ int main(int argc, char* argv[]) {
         if(HasArgument(name)){
 
             if(!cmd.cmd(GetArgumentList(name), cmd)){
-                std::cout << "Usage:\n"
+                dream::dlog << "Usage:\n"
                           << "\t" << name << " " << cmd.help << "\n"
                           << cmd.description << "\n"
                           << "----------------------------------------\n";
@@ -271,6 +307,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    std::cout << "Invalid command - use \"help\" command to display a list of commands\n";
+    dream::dlog << "Invalid command - use \"help\" command to display a list of commands\n";
     return 1;
 }

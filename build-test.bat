@@ -1,5 +1,5 @@
 @echo off
-::		Custom Build Script 2.2
+::		Custom Build Script 2.3
 ::
 ::       Custom library support
 ::
@@ -18,9 +18,9 @@ set COMMANDLINE=1
 set VERBOSE=0
 
 set AUTO_REBUILD=1
-set REBUILD_SOURCE_DIRECTORIES=1
+set REBUILD_SOURCE_DIRECTORIES=0
 set REBUILD_SOURCE_LIBRARIES=0
-set ASYNC_BUILD=2
+set ASYNC_BUILD=1
 
 set LINK_ONLY=0
 
@@ -221,7 +221,7 @@ echo Begin Building...
 	)
 ))
 
-goto loop
+goto linker
 
 :: ---------- Compiler Function -----------
 ::	SourceDirctory FileExtention Compiler CompilerFlags
@@ -232,11 +232,11 @@ goto loop
 			echo Building %~n3_%%~nF.o
 			start /B %WAIT% "%%~nF.o" %3 %ADDITIONAL_INCLUDEDIRS% %~4 %DEBUG_INFO% -c %%F -o !OBJ_DIR!\%~n3_%%~nF.o
 
-			if %ASYNC_BUILD% EQU 2 (
-				timeout /T 1 >nul
-			)
 			if %VERBOSE% GTR 0 (
 				echo %3 %ADDITIONAL_INCLUDEDIRS% %~4 %DEBUG_INFO% -c %%F -o !OBJ_DIR!\%~n3_%%~nF.o
+			)
+			if %ASYNC_BUILD% GTR 0 (
+				call :async_wait
 			)
 		)
 	)
@@ -248,13 +248,44 @@ goto close
 			echo Building %~n3_%%~nF.res
 			start /B %WAIT% "%%~nF.res" %3 %%F -O coff -o !OBJ_DIR!\%~n3_%%~nF.res
 
-			if %ASYNC_BUILD% EQU 2 (
-				timeout /T 1 >nul
-			)
 			if %VERBOSE% GTR 0 (
 				echo %3 %%F -O coff -o !OBJ_DIR!\%~n3_%%~nF.res
 			)
+			if %ASYNC_BUILD% GTR 0 (
+				call :async_wait
+			)
 		)
+	)
+goto close
+
+:: -------- Asnychronous Wait ---------
+:: 	Block until the hardware concurrency is matched
+:async_wait
+	set /A count=0
+	for /f %%G in ('tasklist ^| find /c "%CPP%"') do ( set /A count+=%%G )
+	for /f %%G in ('tasklist ^| find /c "%GCC%"') do ( set /A count+=%%G )
+	for /f %%G in ('tasklist ^| find /c "%GPP%"') do ( set /A count+=%%G )
+
+	if %count% LSS %NUMBER_OF_PROCESSORS% (
+		goto close
+	) else (
+		timeout /t 1 /nobreak>nul
+		goto async_wait
+	)
+goto close
+
+:: 	Block until there are no more build units running
+:async_wait_all
+	set /A count=0
+	for /f %%G in ('tasklist ^| find /c "%CPP%"') do ( set /A count+=%%G )
+	for /f %%G in ('tasklist ^| find /c "%GCC%"') do ( set /A count+=%%G )
+	for /f %%G in ('tasklist ^| find /c "%GPP%"') do ( set /A count+=%%G )
+
+	if %count% EQU 0 (
+		goto close
+	) else (
+		timeout /t 1 /nobreak>nul
+		goto async_wait_all
 	)
 goto close
 ::--------------------------------------
@@ -434,22 +465,10 @@ goto close
 
 
 ::--------------------------------------
-
-:: Wait for building process to finish
-:loop
-set /A count=0
-for /f %%G in ('tasklist ^| find /c "%CPP%"') do ( set /A count+=%%G )
-for /f %%G in ('tasklist ^| find /c "%GCC%"') do ( set /A count+=%%G )
-for /f %%G in ('tasklist ^| find /c "%GPP%"') do ( set /A count+=%%G )
-
-if %count%==0 (
-	goto linker
-) else (
-	timeout /t 2 /nobreak>nul
-	goto loop
-)
-
 :linker
+
+:: Wait for building process to finish all tasks before linking
+call :async_wait_all
 
 set "files="
 

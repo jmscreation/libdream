@@ -61,6 +61,16 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
 
             server = generate_server_object(std::move(soc), 0, name);
 
+            server->register_hook("on_authorized", [this](ClientObject& client, const std::any& data){
+                if(on_connect){
+                    User user(this);
+                    user.uuid = client.get_id();
+                    user.name = client.get_name();
+
+                    on_connect(user);
+                }
+            });
+
             break;
         } catch(...) {
             if(!--retry)
@@ -70,8 +80,6 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
 
     start_context_handle();
     start_runtime();
-
-    std::cout << "connected to server\n"; // temporary debug
 
     return true;
 }
@@ -95,7 +103,7 @@ void Client::client_runtime() { // check for and remove invalid clients
 
     if(server){
         if(!server->is_valid()){
-            std::cout << "disconnected from server\n";
+            dlog << "disconnected from server\n";
             server.reset();
         } else if(!server->is_authorized()) {
             server->client_authorize();
