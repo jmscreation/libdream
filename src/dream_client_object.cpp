@@ -360,34 +360,22 @@ void ClientObject::unregister_hook(uint64_t id) {
 }
 
 void ClientObject::trigger_hook(const std::string& hook_name, const std::any& data) {
-    trigger_lock.lock();
-
-    /* due to the way triggers work, it may
-       be possible to register a trigger from inside a trigger;
-       therefore, we must manually unlock the trigger system when
-       invoking any trigger callbacks.
-    */
+    std::scoped_lock lock(trigger_lock);
 
     for(auto& [id, cb] : cb_global_hooks){
-        trigger_lock.unlock();
         if(!cb(*this, hook_name, data))
             return; // check for global hook override - false return will abort remaining hook triggers
-        trigger_lock.lock();
     }
 
     if(!cb_hooks.count(hook_name)){
-        trigger_lock.unlock();
         return;
     }
 
     auto& hook_list = cb_hooks.at(hook_name);
     for(auto& [id, cb] : hook_list){
-        trigger_lock.unlock();
         cb(*this, data);
-        trigger_lock.lock();
     }
 
-    trigger_lock.unlock();
 }
 
 
