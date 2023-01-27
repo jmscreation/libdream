@@ -50,10 +50,11 @@ void ClientObject::append_command_package(Command&& cmd) {
         raw.write("\0", 1); // length reservation
     }
 
-    { 
+    {
         cereal::BinaryOutputArchive archive(raw);
         archive(cmd);
     } // enforce stream flush
+
 
     raw.seekg(0, std::ios::end);
     uint32_t plength = raw.tellg(); // get the size of the data stream
@@ -83,6 +84,7 @@ bool ClientObject::flush_command_package() {
     {
         std::swap(out_payload_flushing, out_payload); // cache buffer swaps for fast performance
         out_payload.str(""); // clear next payload cache for fresh data for next flush
+        out_payload.clear();
     }
 
     // This is a C++20 hack that essentially gets a read-only const char* + length buffer view of the stringstream;
@@ -94,6 +96,7 @@ bool ClientObject::flush_command_package() {
     if(length > 0){ // let's never send nothing
         if(!send_raw_data(data, length, [this](bool success){
             out_payload_protection.release();
+            trigger_hook("on_sent", success);
         })) out_payload_protection.release(); // whow - release this lock on error
     }
 
@@ -101,9 +104,16 @@ bool ClientObject::flush_command_package() {
 }
 
 void ClientObject::send_command(Command&& cmd) {
-    std::scoped_lock lock(runtime_command_lock);
 
     trigger_hook("on_send", cmd);
+    static size_t max_queue_size = 512;
+    std::unique_lock lock(runtime_command_lock);
+    while(out_commands.size() > max_queue_size){
+        lock.unlock();
+        Clock::sleepMilliseconds(2);
+        lock.lock();
+    }
+
     out_commands.emplace(std::move(cmd)); // move command into the queue
 }
 
@@ -112,7 +122,7 @@ void ClientObject::server_authorize() {
     authorizing = true;
 
     std::thread timeout([&](){
-        Clock::sleepSeconds(3);
+        Clock::sleepSeconds(10);
         if(!server_authorized){
             dlog << "invalid client - validation timeout\n";
             shutdown();
@@ -158,8 +168,10 @@ void ClientObject::client_authorize() {
 void ClientObject::runtime_update() {
     std::scoped_lock lock(runtime_command_lock);
 
+    memory = GetMemoryUsage();
     process_incoming_commands();
 
+    memory = GetMemoryUsage();
     process_outgoing_commands();
 }
 
@@ -194,6 +206,8 @@ void ClientObject::incoming_command_handle() {
     }
 
     in_payload.str(""); // clear the payload buffer
+    in_payload.clear();
+
     asio::async_read(socket, asio::buffer(cmdbuf, sizeof(cmdbuf)), [this](const asio::error_code& error, size_t bytes){
         if(error){
             if(!internal_error_check(error)) return 0ULL;
@@ -294,9 +308,13 @@ void ClientObject::process_incoming_commands() {
 
 void ClientObject::process_outgoing_commands() {
     bool flush = false;
-    for(; !out_commands.empty(); out_commands.pop()){
-        append_command_package(std::move(out_commands.front())); // move all commands into package cache
-        if(!flush) flush = true;
+
+    if(out_payload.tellp() < MAX_PAYLOAD_SIZE){
+        for(size_t i=0; i < 128 && !out_commands.empty(); out_commands.pop(), ++i){
+            append_command_package(std::move(out_commands.front())); // move all commands into package cache
+            if(!flush) flush = true;
+
+        }
     }
 
     if(flush || check_command_package() > 0){
