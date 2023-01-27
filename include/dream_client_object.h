@@ -31,7 +31,8 @@ class ClientObject {
     std::atomic_bool server_authorized, authorizing, valid;
     alignas(uint32_t) char cmdbuf[4]; // buffer for new incoming command data length data
 
-    std::mutex outgoing_command_lock, shutdown_lock, runtime_command_lock;
+    std::mutex outgoing_command_lock, shutdown_lock;
+    std::recursive_mutex runtime_command_lock;
 
     char* in_data; // memory buffer for incoming data
     std::stringstream in_payload; // cache buffer for large payloads

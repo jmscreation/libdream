@@ -27,7 +27,7 @@ class Client {
     std::unique_ptr<ClientObject> generate_server_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name);
 
     // client runtime
-    std::mutex runtime_lock; // runtime mutex
+    std::recursive_mutex runtime_lock; // runtime mutex
     void client_runtime();
 
     // asynchronous callbacks

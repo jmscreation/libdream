@@ -33,20 +33,23 @@
     <ClCompile Include="test\test-dual.cpp">
       <Filter>test</Filter>
     </ClCompile>
-    <ClCompile Include="test\clock.cpp">
-      <Filter>test</Filter>
-    </ClCompile>
     <ClCompile Include="src\dream_client.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="src\dream_command.cpp">
       <Filter>source</Filter>
     </ClCompile>
+    <ClCompile Include="src\dream_externs.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dream_log.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dream_user.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="test\clock.h">
-      <Filter>include</Filter>
-    </ClInclude>
     <ClInclude Include="include\dream_blob.h">
       <Filter>include</Filter>
     </ClInclude>
@@ -81,6 +84,15 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\libdream.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_externs.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_log.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\dream_user.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

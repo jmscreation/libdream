@@ -133,7 +133,16 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
             user.uuid = client.get_id();
             user.name = client.get_name();
 
+            std::scoped_lock lock(runtime_lock);
             on_client_join(user);
+        }
+    });
+
+    c->register_hook("pre_command", [this](ClientObject& client, const std::any& data){
+        const Command& cmd = std::any_cast<const Command&>(data);
+
+        if(cmd.type == Command::RESPONSE){
+            client.send_command(Command::RESPONSE);
         }
     });
 }
