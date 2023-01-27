@@ -67,6 +67,7 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
                     user.uuid = client.get_id();
                     user.name = client.get_name();
 
+                    std::scoped_lock lock(runtime_lock);
                     on_connect(user);
                 }
             });

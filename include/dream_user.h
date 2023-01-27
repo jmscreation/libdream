@@ -43,7 +43,8 @@ public:
     bool valid() const { return ptr != nullptr; }
 };
 
-struct User {
+class User {
+public:
     uint64_t uuid;
     std::string name;
 

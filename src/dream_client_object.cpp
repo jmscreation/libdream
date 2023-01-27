@@ -103,6 +103,7 @@ bool ClientObject::flush_command_package() {
 void ClientObject::send_command(Command&& cmd) {
     std::scoped_lock lock(runtime_command_lock);
 
+    trigger_hook("on_send", cmd);
     out_commands.emplace(std::move(cmd)); // move command into the queue
 }
 
@@ -344,7 +345,7 @@ void ClientObject::unregister_hook(uint64_t id) {
             hooks.erase(id);
             return;
         }
-    }    
+    }
 }
 
 void ClientObject::trigger_hook(const std::string& hook_name, const std::any& data) {

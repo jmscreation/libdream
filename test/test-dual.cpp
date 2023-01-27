@@ -25,13 +25,22 @@ struct Test {
     }
 };
 
+struct User {
+    dream::User user;
+    dream::Clock ping;
+    double ping_ms;
+
+    User(dream::User& user): user(user) {}
+};
+
 class TestServer {
     dream::Server server;
+    std::vector<User> users;
 public:
-    TestServer() {}
+    TestServer() { users.reserve(1024); }
 
     int RunServer() {
-        server.on_client_join = std::bind(&OnClientConnect, this, std::placeholders::_1);
+        server.on_client_join = std::bind(&TestServer::OnClientConnect, this, std::placeholders::_1);
 
         if(!server.start_server(5050)){
             dream::dlog << "error starting server\n";
@@ -57,14 +66,17 @@ private:
             "large piece of data:" + std::string(100000, 'x')};
 
         
-        if(server.get_client_count() > 0){
-            auto clients = server.get_client_list();
-            for(dream::User& user : clients){
-                user.send_string(list.at(rand() % list.size()));
+        for(auto it = users.begin(); it != users.end(); ++it){
+            User& u = *it;
+            if(!u.user.is_connected()){
+                it = users.erase(it);
+                if(it == users.end()) break;
+                --it;
             }
         }
 
-        // server.broadcast_string();
+        //user.send_string(list.at(rand() % list.size()));
+        server.broadcast_string(list.at(rand() % list.size()));
 
         return true;
     }
@@ -78,17 +90,34 @@ private:
         static Clock tc;
         static std::atomic<size_t> msgs = 0;
 
-        user.register_global_hook([&](User client, const std::string& hook, const std::any& data) -> bool {
+        ::User& u = users.emplace_back(user);
+
+        user.register_global_hook([&](dream::User client, const std::string& hook, const std::any& data) -> bool {
             if(hook == "pre_command"){
-                const Command& cmd = std::any_cast<Command>(data);
+                const Command& cmd = std::any_cast<const Command&>(data);
                 if(cmd.type == Command::STRING){
                     msgs++;
-                    dream::dlog << "                 \r" << (double(msgs) / tc.getSeconds()) << " packages per second";
+                    double ping = 0.0;
+                    for(auto& u : users){
+                        ping += u.ping_ms;
+                    }
+                    ping /= double(users.size());
+
+                    dream::dlog << "                                \r" << std::setw(3) << std::setprecision(4) << (double(msgs) / tc.getSeconds()) << " packages per second; " << ping << "ms";
                 }
 
                 if(cmd.type == Command::RESPONSE){
                     msgs = 0;
                     tc.restart();
+                    u.ping_ms = size_t(round(u.ping.getMilliseconds() / double(server.get_client_count())));
+                }
+            }
+
+            if(hook == "on_send"){
+                const Command& cmd = std::any_cast<const Command&>(data);
+                if(cmd.type == Command::PING){
+                    u.ping_ms = 0.0;
+                    u.ping.restart();
                 }
             }
 
@@ -103,6 +132,7 @@ class TestClient {
     int port;
     dream::Client client;
     bool terminated;
+    std::unique_ptr<User> server_user;
 
 public:
     TestClient(const std::string& ipaddr, int port=5050): ip(ipaddr), port(port), terminated(false) {
@@ -110,7 +140,7 @@ public:
     }
 
     int RunClient() {
-        client.on_connect = std::bind(&OnConnect, this, std::placeholders::_1);
+        client.on_connect = std::bind(&TestClient::OnConnect, this, std::placeholders::_1);
 
         if(!client.start_client(port, ip)) {
             dream::dlog << "error connecting to server\n";
@@ -149,23 +179,31 @@ private:
     void OnConnect(dream::User& user) {
         using namespace dream;
 
-        dream::dlog << "Connected to server\n";
+        dream::dlog << "connected to server\n";
 
         // TEST and DEBUG
         static Clock tc;
         static std::atomic<size_t> msgs = 0;
 
-        user.register_global_hook([&](User client, const std::string& hook, const std::any& data) -> bool {
+        server_user = std::make_unique<::User>(user);
+
+        user.register_global_hook([&](dream::User client, const std::string& hook, const std::any& data) -> bool {
             if(hook == "pre_command"){
                 const Command& cmd = std::any_cast<Command>(data);
                 if(cmd.type == Command::STRING){
                     msgs++;
-                    dream::dlog << "                 \r" << (double(msgs) / tc.getSeconds()) << " packages per second";
+                    dream::dlog << "                                \r" << std::setw(3) << std::setprecision(4) << (double(msgs) / tc.getSeconds()) << " packages per second; " << server_user->ping_ms << "ms";
                 }
 
                 if(cmd.type == Command::PING){
                     msgs = 0;
                     tc.restart();
+                    server_user->ping_ms = 0.0;
+                    server_user->ping.restart();
+                }
+
+                if(cmd.type == Command::RESPONSE){
+                    server_user->ping_ms = size_t(server_user->ping.getMilliseconds());
                 }
 
                 if(cmd.type == Command::TEST){

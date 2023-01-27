@@ -49,14 +49,14 @@ class Server {
     std::unique_ptr<ClientObject> generate_client_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name);
 
     // server runtime - check clients and validate the session
-    std::mutex runtime_lock; // runtime mutex
+    std::recursive_mutex runtime_lock; // runtime mutex
     void server_runtime();
 
     // asynchronous callbacks
     void new_client_socket(asio::ip::tcp::socket&& soc);
 
     // asynchronous loop backs
-    std::mutex accept_lock; // acceptor mutex - protect clients map from race
+    std::recursive_mutex accept_lock; // acceptor mutex - protect clients map from race
 
     void do_accept();
 
