@@ -1,7 +1,7 @@
 #pragma once
 
-#include "dream_user.h"
-#include "dream_client_object.h"
+#include "dream_connection.h"
+#include "dream_socket.h"
 #include "dream_block.h"
 #include "ip_tools.h"
 
@@ -27,11 +27,11 @@ class Server {
     asio::io_context ctx;
     asio::io_context::work idle;
     asio::ip::tcp::acceptor listener;
-    
+
     ServerHeader header;
     uint64_t cur_uuid;
-    std::map<uint64_t, std::unique_ptr<ClientObject>> clients;
-    std::vector<std::unique_ptr<ClientObject>> expired_clients;
+    std::map<uint64_t, std::unique_ptr<Socket>> clients;
+    std::vector<std::unique_ptr<Socket>> expired_clients;
 
     Block blobdata;
 
@@ -46,17 +46,16 @@ class Server {
     void start_runtime();
     void stop_runtime();
 
-    std::unique_ptr<ClientObject> generate_client_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name);
+    std::unique_ptr<Socket> generate_socket(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name);
 
     // server runtime - check clients and validate the session
-    std::recursive_mutex runtime_lock; // runtime mutex
+    std::shared_mutex runtime_lock; // runtime mutex
     void server_runtime();
 
     // asynchronous callbacks
     void new_client_socket(asio::ip::tcp::socket&& soc);
 
     // asynchronous loop backs
-    std::recursive_mutex accept_lock; // acceptor mutex - protect clients map from race
 
     void do_accept();
 
@@ -71,15 +70,15 @@ public:
 
     Block& get_block() { return blobdata; }
 
-    size_t get_client_count() { std::scoped_lock lock(accept_lock); return clients.size(); }
+    size_t get_client_count() { std::shared_lock lock(runtime_lock); return clients.size(); }
 
-    std::vector<User> get_client_list();
+    std::vector<Connection> get_client_list();
 
     void broadcast_string(const std::string& data);
 
-    std::function<void(User&)> on_client_join; // this is temporary just so we can quickly get a callback
+    std::function<void(Connection&)> on_client_join; // this is temporary just so we can quickly get a callback
 
-    friend class User;
+    friend class Connection;
 };
 
 

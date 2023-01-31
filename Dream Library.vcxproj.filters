@@ -15,7 +15,7 @@
     <ClCompile Include="src\dream_block.cpp">
       <Filter>source</Filter>
     </ClCompile>
-    <ClCompile Include="src\dream_client_object.cpp">
+    <ClCompile Include="src\dream_socket.cpp">
       <Filter>source</Filter>
     </ClCompile>
     <ClCompile Include="src\dream_clock.cpp">
@@ -45,7 +45,7 @@
     <ClCompile Include="src\dream_log.cpp">
       <Filter>source</Filter>
     </ClCompile>
-    <ClCompile Include="src\dream_user.cpp">
+    <ClCompile Include="src\dream_connection.cpp">
       <Filter>source</Filter>
     </ClCompile>
   </ItemGroup>
@@ -62,7 +62,7 @@
     <ClInclude Include="include\dream_client.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\dream_client_object.h">
+    <ClInclude Include="include\dream_socket.h">
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="include\dream_clock.h">
@@ -92,7 +92,7 @@
     <ClInclude Include="include\dream_log.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\dream_user.h">
+    <ClInclude Include="include\dream_connection.h">
       <Filter>include</Filter>
     </ClInclude>
   </ItemGroup>

@@ -16,7 +16,7 @@ void Server::start_context_handle() {
 }
 
 void Server::reset_listener() {
-    std::scoped_lock lock(accept_lock);
+    std::scoped_lock lock(runtime_lock);
     if(listener.is_open()){
         listener.cancel();
         listener.close();
@@ -30,8 +30,8 @@ void Server::start_runtime() {
             while(runtime_running){
                 Clock::sleepMilliseconds(2); // server runtime has 2ms delay
                 {
-                    std::scoped_lock lock(runtime_lock);
-                    server_runtime();
+                    std::unique_lock<std::shared_mutex> lock(runtime_lock, std::try_to_lock);
+                    if(lock) server_runtime();
                 }
             }
         });
@@ -93,20 +93,20 @@ void Server::stop_server() {
 }
 
 void Server::broadcast_string(const std::string& data) {
-    std::scoped_lock lock(accept_lock);
+    std::shared_lock lock(runtime_lock);
 
     for(auto& [id,client] : clients){
         client->send_command(Command(Command::STRING, data));
     }
 }
 
-std::vector<User> Server::get_client_list() {
-    std::vector<User> list;
+std::vector<Connection> Server::get_client_list() {
+    std::vector<Connection> list;
 
-    std::scoped_lock lock(accept_lock);
+    std::scoped_lock lock(runtime_lock);
 
-    for(auto& [id, client] : clients){
-        User& user = list.emplace_back(this);
+    for(const auto& [id, client] : clients){
+        Connection& user = list.emplace_back(this);
         user.uuid = id;
         user.name = client->get_name();
     }
@@ -117,28 +117,27 @@ std::vector<User> Server::get_client_list() {
 // Callbacks
 
 void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
-    std::scoped_lock lock(accept_lock);
+    std::scoped_lock lock(runtime_lock);
     while(clients.count(cur_uuid)) ++cur_uuid; // find a free uuid
 
     dlog << "new client [" << cur_uuid << "]\n";
     auto& c = clients.insert_or_assign(
                                 cur_uuid,
-                                generate_client_object(std::move(soc), cur_uuid, "NoName")
+                                generate_socket(std::move(soc), cur_uuid, "NoName")
                             ).first->second;
 
     // register the on_authorized callback
-    c->register_hook("on_authorized", [this](ClientObject& client, const std::any& data){
+    c->register_hook("on_authorized", [this](Socket& client, const std::any& data){
         if(on_client_join){
-            User user(this);
+            Connection user(this);
             user.uuid = client.get_id();
             user.name = client.get_name();
 
-            std::scoped_lock lock(runtime_lock);
             on_client_join(user);
         }
     });
 
-    c->register_hook("pre_command", [this](ClientObject& client, const std::any& data){
+    c->register_hook("pre_command", [this](Socket& client, const std::any& data){
         const Command& cmd = std::any_cast<const Command&>(data);
 
         if(cmd.type == Command::RESPONSE){
@@ -149,17 +148,16 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
 
 
 void Server::server_runtime() { // check for and remove invalid clients
-    std::scoped_lock lock(accept_lock);
 
     for(auto it = clients.begin(); it != clients.end(); ++it){
         auto& [id, client] = *it;
 
         if(!client->is_valid()){
+            if(client->is_authorizing() || client->has_weak_references()) continue;
             dlog << client->get_name() << " disconnected\n";
             expired_clients.emplace_back(std::move(client)); // move expired client to gc
             it = clients.erase(it); // remove and continue
-            if(it == clients.end()) break;
-            --it;
+            if(it == clients.end() || --it == clients.end()) break;
             continue;
 
         } else if(!client->is_authorized()) {
@@ -206,8 +204,8 @@ void Server::do_accept() {
 
 // Misc
 
-std::unique_ptr<ClientObject> Server::generate_client_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name) {
-    return std::unique_ptr<ClientObject>( new ClientObject(ctx, std::move(soc), cur_uuid, std::to_string(cur_uuid)) );
+std::unique_ptr<Socket> Server::generate_socket(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name) {
+    return std::unique_ptr<Socket>( new Socket(ctx, std::move(soc), cur_uuid, std::to_string(cur_uuid)) );
 }
 
 

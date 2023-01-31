@@ -219,13 +219,13 @@
   <ItemGroup>
     <ClCompile Include="src\dream_block.cpp" />
     <ClCompile Include="src\dream_client.cpp" />
-    <ClCompile Include="src\dream_client_object.cpp" />
+    <ClCompile Include="src\dream_connection.cpp" />
+    <ClCompile Include="src\dream_socket.cpp" />
     <ClCompile Include="src\dream_clock.cpp" />
     <ClCompile Include="src\dream_command.cpp" />
     <ClCompile Include="src\dream_externs.cpp" />
     <ClCompile Include="src\dream_log.cpp" />
     <ClCompile Include="src\dream_server.cpp" />
-    <ClCompile Include="src\dream_user.cpp" />
     <ClCompile Include="src\ip_tools.cpp" />
     <ClCompile Include="src\libdream.cpp" />
     <ClCompile Include="test\test-dual.cpp" />
@@ -235,14 +235,14 @@
     <ClInclude Include="include\dream_blobbox.h" />
     <ClInclude Include="include\dream_block.h" />
     <ClInclude Include="include\dream_client.h" />
-    <ClInclude Include="include\dream_client_object.h" />
+    <ClInclude Include="include\dream_connection.h" />
+    <ClInclude Include="include\dream_socket.h" />
     <ClInclude Include="include\dream_clock.h" />
     <ClInclude Include="include\dream_command.h" />
     <ClInclude Include="include\dream_externs.h" />
     <ClInclude Include="include\dream_log.h" />
     <ClInclude Include="include\dream_protocol.h" />
     <ClInclude Include="include\dream_server.h" />
-    <ClInclude Include="include\dream_user.h" />
     <ClInclude Include="include\ip_tools.h" />
     <ClInclude Include="include\libdream.h" />
     <ClInclude Include="include\lib_cereal.h" />

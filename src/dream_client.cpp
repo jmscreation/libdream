@@ -61,9 +61,9 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
 
             server = generate_server_object(std::move(soc), 0, name);
 
-            server->register_hook("on_authorized", [this](ClientObject& client, const std::any& data){
+            server->register_hook("on_authorized", [this](Socket& client, const std::any& data){
                 if(on_connect){
-                    User user(this);
+                    Connection user(this);
                     user.uuid = client.get_id();
                     user.name = client.get_name();
 
@@ -115,8 +115,8 @@ void Client::client_runtime() { // check for and remove invalid clients
 
 }
 
-User Client::get_server_user() {
-    User user(this);
+Connection Client::get_socket() {
+    Connection user(this);
     user.uuid = server->get_id();
     user.name = server->get_name();
     return user;
@@ -129,8 +129,8 @@ void Client::send_string(const std::string& data) {
 
 // Misc
 
-std::unique_ptr<ClientObject> Client::generate_server_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name) {
-    return std::unique_ptr<ClientObject>( new ClientObject(ctx, std::move(soc), cur_uuid, std::to_string(cur_uuid)) );
+std::unique_ptr<Socket> Client::generate_server_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name) {
+    return std::unique_ptr<Socket>( new Socket(ctx, std::move(soc), cur_uuid, std::to_string(cur_uuid)) );
 }
 
 

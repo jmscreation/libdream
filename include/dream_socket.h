@@ -15,12 +15,12 @@
 
 namespace dream {
 
-//constexpr size_t MAX_PAYLOAD_SIZE = 1024 * 1024 * 64; // fixed cache for incoming data
-constexpr size_t MAX_PAYLOAD_SIZE = 256; // debug: ultra small cache size for forcing payload fragmentation
+constexpr size_t MAX_PAYLOAD_SIZE = 1024 * 1024 * 4; // fixed cache for incoming data
+//constexpr size_t MAX_PAYLOAD_SIZE = 256; // debug: ultra small cache size for forcing payload fragmentation
 
 static const char DREAM_PROTO_ACCESS [128] = {"\x31\x08\x67\xb0\xca\x7b\xfc\xa2\x8a\x00\x9b\x68\x71\x62\xb4\xa1\x1f\x63\xe1\xe7\x61\x74\x24\x7a\x93\xbc\x30\xbf\x83\xad\xcf\x8d\x89\x5c\x44\xb6\x57\x4c\xc4\xd0\xb4\x0a\x7c\x8a\x6c\xbe\x58\x90\xac\x7c\xf8\x23\x33\x86\x6d\xcf\x49\xe2\x28\x9b\x49\x24\xd3\xb0\x5c\x71\xd8\xf0\x5c\xa6\x2b\xeb\x8c\x14\x19\x03\xfa\x64\x10\x78\x39\xc0\xdc\x64\xf1\x10\xe6\xa4\x53\xc8\x57\xb9\x71\xe3\xa7\x37\xd4\xbb\xca\xb1\x90\xfa\x7f\x8a\x8c\xd9\x6b\x15\xa4\xee\xf4\x7d\x07\x79\x28\xe5\x17\x57\xbb\x69\x83\x10\x7f\x1f\x49\xe0\xfc"};
 
-class ClientObject {
+class Socket {
     asio::io_context& ctx;
     asio::ip::tcp::socket socket;
 
@@ -43,12 +43,12 @@ class ClientObject {
 
     std::binary_semaphore in_payload_protection; // protect read payloads from getting corrupt
     std::binary_semaphore out_payload_protection; // protect write payloads from getting corrupt
-    std::atomic<uint32_t> external_lock; // protects the raw access from being invalid if this object is destroyed too early - see dream::ClientObjectRef
+    std::atomic<uint32_t> external_lock; // protects the raw access from being invalid if this object is destroyed too early - see dream::SocketRef
 
     // Hookable interface
 
-    using HookCallback = std::function<void(ClientObject&, const std::any& data)>;
-    using GlobalHookCallback = std::function<bool(ClientObject&, const std::string& hook, const std::any& data)>;
+    using HookCallback = std::function<void(Socket&, const std::any& data)>;
+    using GlobalHookCallback = std::function<bool(Socket&, const std::string& hook, const std::any& data)>;
     
     static std::atomic<uint64_t> _hook_id_counter;
 
@@ -60,16 +60,16 @@ class ClientObject {
     // - - - - - - - -
 
 public:
-    ClientObject(asio::io_context& ctx, asio::ip::tcp::socket&& soc, uint64_t id, std::string name):
+    Socket(asio::io_context& ctx, asio::ip::tcp::socket&& soc, uint64_t id, std::string name):
         ctx(ctx), socket(std::move(soc)), id(id), name(name), consecutiveErrors(0),
         server_authorized(false), authorizing(false), valid(true), in_data(new char[MAX_PAYLOAD_SIZE]),
         in_payload_protection(1), out_payload_protection(1), external_lock(0)
     {}
 
-    ~ClientObject();
+    ~Socket();
 
-    ClientObject(const ClientObject&) = delete;
-    ClientObject& operator=(const ClientObject&) = delete;
+    Socket(const Socket&) = delete;
+    Socket& operator=(const Socket&) = delete;
 
     void server_authorize(); // begin authorize process for server - asynchronous
     void client_authorize(); // begin authorize process for client - asynchronous
@@ -81,6 +81,7 @@ public:
     void shutdown(); // a safe way to shutdown the socket
     bool is_valid();
     bool is_authorized();
+    bool is_authorizing();
     size_t get_id() { return id; }
     std::string get_name() { return name; }
 
@@ -125,7 +126,7 @@ public:
         ar(id, name);
     }
 
-    friend class ClientObjectRef;
+    friend class SocketRef;
 };
 
 

@@ -10,7 +10,7 @@ class Client {
     
     ServerHeader header;
     uint64_t cur_uuid;
-    std::unique_ptr<ClientObject> server;
+    std::unique_ptr<Socket> server;
 
     Block blobdata;
 
@@ -24,7 +24,7 @@ class Client {
     void start_runtime();
     void stop_runtime();
 
-    std::unique_ptr<ClientObject> generate_server_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name);
+    std::unique_ptr<Socket> generate_server_object(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name);
 
     // client runtime
     std::recursive_mutex runtime_lock; // runtime mutex
@@ -46,13 +46,13 @@ public:
 
     Block& get_block() { return blobdata; }
 
-    User get_server_user();
+    Connection get_socket();
 
     void send_string(const std::string& data);
 
-    std::function<void(User&)> on_connect; // this is temporary just so we can quickly get a callback
+    std::function<void(Connection&)> on_connect; // this is temporary just so we can quickly get a callback
 
-    friend class User;
+    friend class Connection;
 };
 
 

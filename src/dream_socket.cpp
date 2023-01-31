@@ -1,4 +1,4 @@
-#include "dream_client_object.h"
+#include "dream_socket.h"
 
 #include <iostream>
 #include <sstream>
@@ -8,13 +8,13 @@
 
 namespace dream {
 
-ClientObject::~ClientObject() {
+Socket::~Socket() {
     shutdown();
     delete[] in_data;
 }
 
 // very low level interface for sending out data asynchronously - this is not to be used externally
-bool ClientObject::send_raw_data(const char* data, size_t length, std::function<void(bool success)> on_complete) {
+bool Socket::send_raw_data(const char* data, size_t length, std::function<void(bool success)> on_complete) {
     if(!is_valid()) return false;
 
     auto buf = asio::buffer(data, length);
@@ -40,7 +40,7 @@ bool ClientObject::send_raw_data(const char* data, size_t length, std::function<
 }
 
 // append a new command to the package payload - remember to flush the payload buffer to send the data
-void ClientObject::append_command_package(Command&& cmd) {
+void Socket::append_command_package(Command&& cmd) {
     std::scoped_lock lock(outgoing_command_lock);
 
     std::stringstream raw;
@@ -73,11 +73,11 @@ void ClientObject::append_command_package(Command&& cmd) {
     }
 }
 
-size_t ClientObject::check_command_package() {
+size_t Socket::check_command_package() {
     return size_t(out_payload.tellp());
 }
 
-bool ClientObject::flush_command_package() {
+bool Socket::flush_command_package() {
     if(!out_payload_protection.try_acquire()) return false;
 
     {
@@ -100,26 +100,17 @@ bool ClientObject::flush_command_package() {
     return true;
 }
 
-void ClientObject::send_command(Command&& cmd) {
+void Socket::send_command(Command&& cmd) {
     std::scoped_lock lock(runtime_command_lock);
 
     trigger_hook("on_send", cmd);
     out_commands.emplace(std::move(cmd)); // move command into the queue
 }
 
-void ClientObject::server_authorize() {
+void Socket::server_authorize() {
     if(authorizing) return;
-    authorizing = true;
 
-    std::thread timeout([&](){
-        Clock::sleepSeconds(3);
-        if(!server_authorized){
-            dlog << "invalid client - validation timeout\n";
-            shutdown();
-            valid = false;
-        }
-    });
-    timeout.detach();
+    authorizing = true;
 
     asio::async_read(socket, asio::buffer(in_data, sizeof(DREAM_PROTO_ACCESS)), [&](const asio::error_code& error, size_t bytes){
         if(error){
@@ -133,14 +124,24 @@ void ClientObject::server_authorize() {
         std::string rcv(in_data, bytes);
         std::string rdx(DREAM_PROTO_ACCESS, sizeof(DREAM_PROTO_ACCESS));
         if( (server_authorized = (rcv == rdx)) ){ // authorized successful
-            authorizing = false;
             trigger_hook("on_authorized");
             incoming_command_handle(); // begin incoming data stream
         }
     });
+
+    std::thread timeout([&](){
+        dream::Clock::sleepSeconds(3);
+        if(!server_authorized){
+            dlog << "invalid client - validation timeout\n";
+            shutdown();
+            valid = false;
+        }
+        authorizing = false;
+    });
+    timeout.detach();
 }
 
-void ClientObject::client_authorize() {
+void Socket::client_authorize() {
     for(int i=0; i < 4 && // retry 3 times
         (
             !out_payload_protection.try_acquire() ||
@@ -155,7 +156,7 @@ void ClientObject::client_authorize() {
         ); ++i) Clock::sleepSeconds(1); // 1 second timeout
 }
 
-void ClientObject::runtime_update() {
+void Socket::runtime_update() {
     std::scoped_lock lock(runtime_command_lock);
 
     process_incoming_commands();
@@ -163,7 +164,7 @@ void ClientObject::runtime_update() {
     process_outgoing_commands();
 }
 
-void ClientObject::shutdown() {
+void Socket::shutdown() {
     std::scoped_lock lock(shutdown_lock);
 
     if(socket.is_open()){
@@ -173,21 +174,25 @@ void ClientObject::shutdown() {
     }
 }
 
-bool ClientObject::is_valid() {
+bool Socket::is_valid() {
     return socket.is_open() && valid;
 }
 
-bool ClientObject::is_authorized() {
-    return server_authorized;
+bool Socket::is_authorized() {
+    return server_authorized.load();
 }
 
-void ClientObject::reset_and_receive_data() {
+bool Socket::is_authorizing() {
+    return authorizing.load();
+}
+
+void Socket::reset_and_receive_data() {
     in_payload_protection.release();
 
     incoming_command_handle();
 }
 
-void ClientObject::incoming_command_handle() {
+void Socket::incoming_command_handle() {
     if (!in_payload_protection.try_acquire()) {
         dlog << "A serious error has occurred:\nThe incoming data handler was called at an invalid time!\n";
         return;
@@ -215,7 +220,7 @@ void ClientObject::incoming_command_handle() {
     });
 }
 
-void ClientObject::incoming_data_handle(size_t length) {
+void Socket::incoming_data_handle(size_t length) {
     size_t overflow = length > MAX_PAYLOAD_SIZE ? length - MAX_PAYLOAD_SIZE : 0;
 
     asio::async_read(socket, asio::buffer(in_data, length - overflow), [this, length, overflow](const asio::error_code& error, size_t bytes){
@@ -252,7 +257,7 @@ void ClientObject::incoming_data_handle(size_t length) {
     });
 }
 
-bool ClientObject::internal_error_check(const asio::error_code& error) {
+bool Socket::internal_error_check(const asio::error_code& error) {
     trigger_hook("internal_error", error);
 
     if(!socket.is_open() || ++consecutiveErrors > 4){
@@ -262,7 +267,7 @@ bool ClientObject::internal_error_check(const asio::error_code& error) {
     return true; // retry
 }
 
-void ClientObject::process_command(Command& cmd) {
+void Socket::process_command(Command& cmd) {
     trigger_hook("pre_command", cmd);
 
     switch(cmd.type){
@@ -285,14 +290,14 @@ void ClientObject::process_command(Command& cmd) {
 }
 
 
-void ClientObject::process_incoming_commands() {
+void Socket::process_incoming_commands() {
     while(!in_commands.empty()){ // process all commands and dequeue
         process_command(in_commands.front());
         in_commands.pop();
     }
 }
 
-void ClientObject::process_outgoing_commands() {
+void Socket::process_outgoing_commands() {
     bool flush = false;
     for(; !out_commands.empty(); out_commands.pop()){
         append_command_package(std::move(out_commands.front())); // move all commands into package cache
@@ -306,9 +311,9 @@ void ClientObject::process_outgoing_commands() {
 
 // Hookable Implementations
 
-std::atomic<uint64_t> ClientObject::_hook_id_counter = 0;
+std::atomic<uint64_t> Socket::_hook_id_counter = 0;
 
-uint64_t ClientObject::register_hook(const std::string& hook_name, HookCallback hook) {
+uint64_t Socket::register_hook(const std::string& hook_name, HookCallback hook) {
     std::scoped_lock lock(trigger_lock);
     uint64_t id = _hook_id_counter++;
 
@@ -323,7 +328,7 @@ uint64_t ClientObject::register_hook(const std::string& hook_name, HookCallback 
     return id;
 }
 
-uint64_t ClientObject::register_global_hook(GlobalHookCallback hook) {
+uint64_t Socket::register_global_hook(GlobalHookCallback hook) {
     std::scoped_lock lock(trigger_lock);
     uint64_t id = _hook_id_counter++;
 
@@ -332,7 +337,7 @@ uint64_t ClientObject::register_global_hook(GlobalHookCallback hook) {
     return id;
 }
 
-void ClientObject::unregister_hook(uint64_t id) {
+void Socket::unregister_hook(uint64_t id) {
     std::scoped_lock lock(trigger_lock);
 
     if(cb_global_hooks.count(id)){ // check the global hooks for a trigger that contains the hook id
@@ -348,7 +353,7 @@ void ClientObject::unregister_hook(uint64_t id) {
     }
 }
 
-void ClientObject::trigger_hook(const std::string& hook_name, const std::any& data) {
+void Socket::trigger_hook(const std::string& hook_name, const std::any& data) {
     std::scoped_lock lock(trigger_lock);
 
     for(auto& [id, cb] : cb_global_hooks){
@@ -364,7 +369,6 @@ void ClientObject::trigger_hook(const std::string& hook_name, const std::any& da
     for(auto& [id, cb] : hook_list){
         cb(*this, data);
     }
-
 }
 
 

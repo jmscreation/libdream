@@ -19,7 +19,7 @@
 #include "dream_blob.h"
 #include "dream_server.h"
 #include "dream_client.h"
-#include "dream_user.h"
+#include "dream_connection.h"
 
 namespace dream {
 

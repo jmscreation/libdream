@@ -26,11 +26,11 @@ struct Test {
 };
 
 struct User {
-    dream::User user;
+    dream::Connection user;
     dream::Clock ping;
     double ping_ms;
 
-    User(dream::User& user): user(user) {}
+    User(dream::Connection& user): user(user) {}
 };
 
 class TestServer {
@@ -81,7 +81,7 @@ private:
         return true;
     }
 
-    void OnClientConnect(dream::User& user) {
+    void OnClientConnect(dream::Connection& user) {
         using namespace dream;
 
         dream::dlog << "User connected: " << user.get_name() << "\n";
@@ -92,7 +92,7 @@ private:
 
         ::User& u = users.emplace_back(user);
 
-        user.register_global_hook([&](dream::User client, const std::string& hook, const std::any& data) -> bool {
+        user.register_global_hook([&](dream::Connection client, const std::string& hook, const std::any& data) -> bool {
             if(hook == "pre_command"){
                 const Command& cmd = std::any_cast<const Command&>(data);
                 if(cmd.type == Command::STRING){
@@ -109,7 +109,7 @@ private:
                 if(cmd.type == Command::RESPONSE){
                     msgs = 0;
                     tc.restart();
-                    u.ping_ms = size_t(round(u.ping.getMilliseconds() / double(server.get_client_count())));
+                    u.ping_ms = round(u.ping.getMilliseconds() / double(server.get_client_count()));
                 }
             }
 
@@ -176,7 +176,7 @@ private:
         return true;
     }
 
-    void OnConnect(dream::User& user) {
+    void OnConnect(dream::Connection& user) {
         using namespace dream;
 
         dream::dlog << "connected to server\n";
@@ -187,7 +187,7 @@ private:
 
         server_user = std::make_unique<::User>(user);
 
-        user.register_global_hook([&](dream::User client, const std::string& hook, const std::any& data) -> bool {
+        user.register_global_hook([&](dream::Connection client, const std::string& hook, const std::any& data) -> bool {
             if(hook == "pre_command"){
                 const Command& cmd = std::any_cast<Command>(data);
                 if(cmd.type == Command::STRING){
@@ -203,7 +203,7 @@ private:
                 }
 
                 if(cmd.type == Command::RESPONSE){
-                    server_user->ping_ms = size_t(server_user->ping.getMilliseconds());
+                    server_user->ping_ms = server_user->ping.getMilliseconds();
                 }
 
                 if(cmd.type == Command::TEST){
