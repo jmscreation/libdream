@@ -227,7 +227,7 @@ private:
 
 
 
-using ArgumentList = const std::vector<std::string>&;
+using ArgumentList = std::vector<std::string>;
 
 namespace entry {
 

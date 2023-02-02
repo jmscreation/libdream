@@ -108,9 +108,9 @@ void Socket::wait_for_flush() {
 }
 
 void Socket::send_command(Command&& cmd) {
-    std::unique_lock<std::shared_mutex> lock(outgoing_command_lock);
-
     trigger_hook("on_send", cmd);
+
+    std::unique_lock<std::shared_mutex> lock(outgoing_command_lock);
     out_commands.emplace(std::move(cmd)); // move command into the queue
 }
 
