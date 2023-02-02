@@ -153,7 +153,7 @@ void Server::server_runtime() { // check for and remove invalid clients
         if(!client->is_valid()){
             if(client->is_authorizing() || client->has_weak_references()) continue;
             dlog << client->get_name() << " disconnected\n";
-            lock.release();
+            lock.unlock();
             std::unique_lock<std::shared_mutex> ulock(socket_list_lock);
             expired_clients.emplace_back(std::move(client)); // move expired client to gc
             it = socket_list.erase(it); // remove and continue
@@ -168,7 +168,7 @@ void Server::server_runtime() { // check for and remove invalid clients
         }
     }
 
-    if(ping_timeout.getSeconds() > 10){
+    if(ping_timeout.getSeconds() > 3){
         for(auto& [id, client] : socket_list){
             if(!client->is_authorized()) continue;
 
