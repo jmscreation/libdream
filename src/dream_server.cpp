@@ -16,7 +16,7 @@ void Server::start_context_handle() {
 }
 
 void Server::reset_listener() {
-    std::scoped_lock lock(runtime_lock);
+    std::unique_lock<std::shared_mutex> lock(runtime_lock);
     if(listener.is_open()){
         listener.cancel();
         listener.close();
@@ -29,10 +29,7 @@ void Server::start_runtime() {
             runtime_running = true;
             while(runtime_running){
                 Clock::sleepMilliseconds(2); // server runtime has 2ms delay
-                {
-                    std::unique_lock<std::shared_mutex> lock(runtime_lock, std::try_to_lock);
-                    if(lock) server_runtime();
-                }
+                server_runtime();
             }
         });
     }
@@ -103,7 +100,7 @@ void Server::broadcast_string(const std::string& data) {
 std::vector<Connection> Server::get_client_list() {
     std::vector<Connection> list;
 
-    std::scoped_lock lock(runtime_lock);
+    std::shared_lock<std::shared_mutex> lock(runtime_lock);
 
     for(const auto& [id, client] : clients){
         Connection& user = list.emplace_back(this);
@@ -117,7 +114,7 @@ std::vector<Connection> Server::get_client_list() {
 // Callbacks
 
 void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
-    std::scoped_lock lock(runtime_lock);
+    std::unique_lock<std::shared_mutex> lock(runtime_lock);
     while(clients.count(cur_uuid)) ++cur_uuid; // find a free uuid
 
     dlog << "new client [" << cur_uuid << "]\n";
@@ -125,7 +122,7 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
                                 cur_uuid,
                                 generate_socket(std::move(soc), cur_uuid, "NoName")
                             ).first->second;
-
+    lock.unlock();
     // register the on_authorized callback
     c->register_hook("on_authorized", [this](Socket& client, const std::any& data){
         if(on_client_join){

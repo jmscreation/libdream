@@ -41,8 +41,6 @@ bool Socket::send_raw_data(const char* data, size_t length, std::function<void(b
 
 // append a new command to the package payload - remember to flush the payload buffer to send the data
 void Socket::append_command_package(Command&& cmd) {
-    std::scoped_lock lock(outgoing_command_lock);
-
     std::stringstream raw;
 
     auto beg = raw.tellp(); // prepare for overwritten length
@@ -56,7 +54,9 @@ void Socket::append_command_package(Command&& cmd) {
     } // enforce stream flush
 
     raw.seekg(0, std::ios::end);
-    uint32_t plength = raw.tellg(); // get the size of the data stream
+    if(raw.tellg() > UINT32_MAX) throw std::runtime_error("command payload too large");
+
+    uint32_t plength = uint32_t(raw.tellg()); // get the size of the data stream
 
     if(plength <= sizeof(plength)){
         dlog << "warning: skipping package due to zero length payload\n";
@@ -101,7 +101,7 @@ bool Socket::flush_command_package() {
 }
 
 void Socket::send_command(Command&& cmd) {
-    std::scoped_lock lock(runtime_command_lock);
+    std::unique_lock<std::shared_mutex> lock(outgoing_command_lock);
 
     trigger_hook("on_send", cmd);
     out_commands.emplace(std::move(cmd)); // move command into the queue
@@ -157,7 +157,6 @@ void Socket::client_authorize() {
 }
 
 void Socket::runtime_update() {
-    std::scoped_lock lock(runtime_command_lock);
 
     process_incoming_commands();
 
@@ -165,7 +164,7 @@ void Socket::runtime_update() {
 }
 
 void Socket::shutdown() {
-    std::scoped_lock lock(shutdown_lock);
+    std::unique_lock<std::mutex> lock(shutdown_lock);
 
     if(socket.is_open()){
         dlog << "Client " << name << " disconnected\n";
@@ -245,7 +244,7 @@ void Socket::incoming_data_handle(size_t length) {
                     cereal::BinaryInputArchive fetch(in_payload);
                     fetch(cmd); // process data back into command
                     {
-                        std::scoped_lock lock(runtime_command_lock);
+                        std::unique_lock<std::shared_mutex> lock(incoming_command_lock);
                         in_commands.emplace(std::move(cmd));
                     }
                 } catch(cereal::Exception e){
@@ -291,6 +290,8 @@ void Socket::process_command(Command& cmd) {
 
 
 void Socket::process_incoming_commands() {
+    std::unique_lock<std::shared_mutex> lock(incoming_command_lock);
+
     while(!in_commands.empty()){ // process all commands and dequeue
         process_command(in_commands.front());
         in_commands.pop();
@@ -298,6 +299,8 @@ void Socket::process_incoming_commands() {
 }
 
 void Socket::process_outgoing_commands() {
+    std::unique_lock<std::shared_mutex> lock(outgoing_command_lock);
+
     bool flush = false;
     for(; !out_commands.empty(); out_commands.pop()){
         append_command_package(std::move(out_commands.front())); // move all commands into package cache
@@ -308,68 +311,5 @@ void Socket::process_outgoing_commands() {
         flush_command_package(); // flush out the payload stream
     }
 }
-
-// Hookable Implementations
-
-std::atomic<uint64_t> Socket::_hook_id_counter = 0;
-
-uint64_t Socket::register_hook(const std::string& hook_name, HookCallback hook) {
-    std::scoped_lock lock(trigger_lock);
-    uint64_t id = _hook_id_counter++;
-
-    if(!cb_hooks.count(hook_name)){
-        cb_hooks.insert_or_assign(hook_name, std::map<uint64_t, HookCallback> {}); // insert fresh empty map
-    }
-
-    auto& hooks = cb_hooks.at(hook_name);
-
-    hooks.insert_or_assign(id, hook);
-
-    return id;
-}
-
-uint64_t Socket::register_global_hook(GlobalHookCallback hook) {
-    std::scoped_lock lock(trigger_lock);
-    uint64_t id = _hook_id_counter++;
-
-    cb_global_hooks.insert_or_assign(id, hook);
-
-    return id;
-}
-
-void Socket::unregister_hook(uint64_t id) {
-    std::scoped_lock lock(trigger_lock);
-
-    if(cb_global_hooks.count(id)){ // check the global hooks for a trigger that contains the hook id
-        cb_global_hooks.erase(id);
-        return;
-    }
-
-    for(auto& [_, hooks] : cb_hooks){
-        if(hooks.count(id)){ // find the hook trigger that contains the hook id
-            hooks.erase(id);
-            return;
-        }
-    }
-}
-
-void Socket::trigger_hook(const std::string& hook_name, const std::any& data) {
-    std::scoped_lock lock(trigger_lock);
-
-    for(auto& [id, cb] : cb_global_hooks){
-        if(!cb(*this, hook_name, data))
-            return; // check for global hook override - false return will abort remaining hook triggers
-    }
-
-    if(!cb_hooks.count(hook_name)){
-        return;
-    }
-
-    auto& hook_list = cb_hooks.at(hook_name);
-    for(auto& [id, cb] : hook_list){
-        cb(*this, data);
-    }
-}
-
 
 }

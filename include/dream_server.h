@@ -70,7 +70,7 @@ public:
 
     Block& get_block() { return blobdata; }
 
-    size_t get_client_count() { std::shared_lock lock(runtime_lock); return clients.size(); }
+    size_t get_client_count() { std::shared_lock<std::shared_mutex> lock(runtime_lock); return clients.size(); }
 
     std::vector<Connection> get_client_list();
 

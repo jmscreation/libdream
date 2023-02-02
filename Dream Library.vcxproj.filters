@@ -95,5 +95,8 @@
     <ClInclude Include="include\dream_connection.h">
       <Filter>include</Filter>
     </ClInclude>
+    <ClInclude Include="include\dream_hook.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

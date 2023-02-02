@@ -30,10 +30,6 @@ class Client {
     std::recursive_mutex runtime_lock; // runtime mutex
     void client_runtime();
 
-    // asynchronous callbacks
-
-    // asynchronous loop backs
-
 public:
     Client();
     virtual ~Client();

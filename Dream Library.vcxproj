@@ -236,6 +236,7 @@
     <ClInclude Include="include\dream_block.h" />
     <ClInclude Include="include\dream_client.h" />
     <ClInclude Include="include\dream_connection.h" />
+    <ClInclude Include="include\dream_hook.h" />
     <ClInclude Include="include\dream_socket.h" />
     <ClInclude Include="include\dream_clock.h" />
     <ClInclude Include="include\dream_command.h" />
