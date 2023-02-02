@@ -36,6 +36,8 @@ struct User {
 class TestServer {
     dream::Server server;
     std::vector<User> users;
+    std::mutex users_mtx;
+
 public:
     TestServer() { users.reserve(1024); }
 
@@ -65,13 +67,15 @@ private:
             "this is test data", "chunk of data", "something", "more data as a string placed here",
             "large piece of data:" + std::string(100000, 'x')};
 
-        
-        for(auto it = users.begin(); it != users.end(); ++it){
-            User& u = *it;
-            if(!u.user.is_connected()){
-                it = users.erase(it);
-                if(it == users.end()) break;
-                --it;
+        {
+            std::scoped_lock lock(users_mtx);
+            for(auto it = users.begin(); it != users.end(); ++it){
+                User& u = *it;
+                if(!u.user.is_connected()){
+                    it = users.erase(it);
+                    if(it == users.end()) break;
+                    --it;
+                }
             }
         }
 
@@ -82,6 +86,7 @@ private:
     }
 
     void OnClientConnect(dream::Connection& user) {
+        std::scoped_lock lock(users_mtx);
         using namespace dream;
 
         dream::dlog << "User connected: " << user.get_name() << "\n";
