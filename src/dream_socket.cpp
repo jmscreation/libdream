@@ -100,6 +100,13 @@ bool Socket::flush_command_package() {
     return true;
 }
 
+void Socket::wait_for_flush() {
+    do {
+        Clock::sleepMilliseconds(2);
+        std::unique_lock<std::shared_mutex> lock(outgoing_command_lock);
+    } while(!flush_command_package());
+}
+
 void Socket::send_command(Command&& cmd) {
     std::unique_lock<std::shared_mutex> lock(outgoing_command_lock);
 
@@ -167,7 +174,7 @@ void Socket::shutdown() {
     std::unique_lock<std::mutex> lock(shutdown_lock);
 
     if(socket.is_open()){
-        dlog << "Client " << name << " disconnected\n";
+        dlog << "socket " << name << " disconnected\n";
         socket.close();
         trigger_hook("on_disconnected");
     }

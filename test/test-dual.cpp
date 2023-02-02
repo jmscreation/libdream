@@ -133,10 +133,13 @@ class TestClient {
     dream::Client client;
     bool terminated;
     std::unique_ptr<User> server_user;
+    dream::Clock lifetime_timer;
 
 public:
-    TestClient(const std::string& ipaddr, int port=5050): ip(ipaddr), port(port), terminated(false) {
+    std::atomic<int32_t> lifetime;
 
+    TestClient(const std::string& ipaddr, int port=5050):
+        ip(ipaddr), port(port), terminated(false), lifetime(-1) {
     }
 
     int RunClient() {
@@ -172,6 +175,10 @@ private:
             "large piece of data:" + std::string(100000, 'x')};
 
         client.send_string(list.at(rand() % list.size()));
+
+        if(lifetime > 0 && int32_t(lifetime_timer.getMilliseconds()) > lifetime){
+            return false;
+        }
 
         return true;
     }
@@ -258,11 +265,11 @@ std::map<std::string, Command> commands {
         }
     }},
     {"client", {
-        "Start the test client and connect to remote host",
-        "ipaddr | ?port",
+        "Start the test client and connect to remote host. Disconnect and reconnect after timer if specified",
+        "ipaddr | ?port | ?timer",
         [](ArgumentList args, const Command& t) -> bool {
             std::unique_ptr<TestClient> client;
-            if(args.size() < 1 || args.size() > 2) return false;
+            if(args.size() < 1) return false;
 
             std::string ip = args.at(0);
             
@@ -283,11 +290,21 @@ std::map<std::string, Command> commands {
                     return false;
                 }
             }
+            int timer = -1;
+            if(args.size() > 2){
+                try {
+                    timer = std::stoi(args.at(2));
+                } catch(std::invalid_argument e) {
+                    dream::dlog << "invalid argument" << "\n";
+                    return false;
+                }
+            }
 
             while(1){
                 client = port ? std::make_unique<TestClient>(ip, port)
                               : std::make_unique<TestClient>(ip);
-                
+                client->lifetime = timer;
+
                 dream::dlog << "connecting to server..." << "\n";
                 client->RunClient();
 
@@ -296,7 +313,7 @@ std::map<std::string, Command> commands {
 
             return true;
         }
-    }},
+    }}
 
 };
 

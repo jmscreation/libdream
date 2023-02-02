@@ -65,6 +65,7 @@ public:
     void runtime_update(); // misc blocking update loop
 
     void send_command(Command&& cmd); // send command to outgoing command queue
+    void wait_for_flush(); // block until all data has been sent or an error occurred
 
     void shutdown(); // a safe way to shutdown the socket
     bool is_valid();

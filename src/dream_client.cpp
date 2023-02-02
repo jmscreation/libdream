@@ -82,6 +82,8 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
 }
 
 void Client::stop_client() {
+    if(server) server->wait_for_flush();
+
     ctx.stop();
 
     stop_runtime();
