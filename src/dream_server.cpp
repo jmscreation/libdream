@@ -145,6 +145,7 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
 
 
 void Server::server_runtime() { // check for and remove invalid clients
+    std::shared_lock<std::shared_mutex> lock(socket_list_lock);
 
     for(auto it = socket_list.begin(); it != socket_list.end(); ++it){
         auto& [id, client] = *it;
@@ -152,6 +153,8 @@ void Server::server_runtime() { // check for and remove invalid clients
         if(!client->is_valid()){
             if(client->is_authorizing() || client->has_weak_references()) continue;
             dlog << client->get_name() << " disconnected\n";
+            lock.release();
+            std::unique_lock<std::shared_mutex> ulock(socket_list_lock);
             expired_clients.emplace_back(std::move(client)); // move expired client to gc
             it = socket_list.erase(it); // remove and continue
             if(it == socket_list.end() || --it == socket_list.end()) break;

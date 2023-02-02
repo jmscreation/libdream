@@ -82,12 +82,11 @@ bool Client::start_client(short port, const std::string& ip, const std::string& 
 }
 
 void Client::stop_client() {
+    stop_runtime();
+
     if(server) server->wait_for_flush();
 
     ctx.stop();
-
-    stop_runtime();
-
     server.reset();
     while(!ctx.stopped());
     ctx.reset();
@@ -99,7 +98,6 @@ void Client::stop_client() {
 
 
 void Client::client_runtime() { // check for and remove invalid clients
-
     if(server){
         if(!server->is_valid()){
             dlog << "disconnected from server\n";
