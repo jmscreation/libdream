@@ -27,9 +27,14 @@ class Server {
     asio::io_context ctx;
     asio::io_context::work idle;
     asio::ip::tcp::acceptor listener;
+    asio::ip::tcp::endpoint endpoint;
 
     ServerHeader header;
     uint64_t cur_uuid;
+    
+    std::atomic<uint16_t> connect_protect;
+    Clock last_connection_time;
+
     std::map<uint64_t, std::unique_ptr<Socket>> socket_list;
     std::vector<std::unique_ptr<Socket>> expired_clients;
 
@@ -40,7 +45,6 @@ class Server {
 
     Clock ping_timeout;
 
-    void reset_listener();
     void start_context_handle();
 
     void start_runtime();
@@ -57,6 +61,8 @@ class Server {
 
     // asynchronous loop backs
 
+    void start_accept();
+    void stop_accept();
     void do_accept();
 
 public:

@@ -39,7 +39,7 @@ class TestServer {
     std::mutex users_mtx;
 
 public:
-    TestServer() { users.reserve(1024); }
+    TestServer() { users.reserve(2048); }
 
     int RunServer() {
         server.on_client_join = std::bind(&TestServer::OnClientConnect, this, std::placeholders::_1);
@@ -70,10 +70,9 @@ private:
         {
             std::scoped_lock lock(users_mtx);
             for(auto it = users.begin(); it != users.end(); ++it){
-                User& u = *it;
-                if(!u.user.is_connected()){
+                if(!it->user.is_connected()){
                     it = users.erase(it);
-                    if(it == users.end()) break;
+                    if(it == users.end() || it == users.begin()) break;
                     --it;
                 }
             }

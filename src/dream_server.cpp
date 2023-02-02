@@ -15,14 +15,6 @@ void Server::start_context_handle() {
     });
 }
 
-void Server::reset_listener() {
-    std::unique_lock<std::shared_mutex> lock(socket_list_lock);
-    if(listener.is_open()){
-        listener.cancel();
-        listener.close();
-    }
-}
-
 void Server::start_runtime() {
     if(!runtime_running){
         runtime_handle = std::thread([this](){
@@ -31,6 +23,11 @@ void Server::start_runtime() {
                 Clock::sleepMilliseconds(2); // server runtime has 2ms delay
                 server_runtime();
             }
+            
+            do {
+                listener.close();
+                Clock::sleepMilliseconds(50);
+            } while(connect_protect > 0);
         });
     }
 }
@@ -44,10 +41,10 @@ void Server::stop_runtime() {
 }
 
 bool Server::start_server(short port, const std::string& ip) {
-    reset_listener();
+    stop_accept();
     stop_runtime();
 
-    asio::ip::tcp::endpoint endpoint(asio::ip::tcp::v4(), port);
+    endpoint = asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port);
 
     try {
         if(ip.size()){
@@ -56,12 +53,7 @@ bool Server::start_server(short port, const std::string& ip) {
             endpoint = asio::ip::tcp::endpoint(addr, port);
         }
 
-        listener.open(endpoint.protocol());
-        listener.set_option(asio::ip::tcp::acceptor::reuse_address(true));
-        listener.bind(endpoint);
-        listener.listen();
-
-        do_accept();
+        start_accept();
 
     } catch(...) {
         return false;
@@ -76,17 +68,18 @@ bool Server::start_server(short port, const std::string& ip) {
 }
 
 void Server::stop_server() {
-    ctx.stop(); // first send stop signal to io context
-
+    stop_accept();
     stop_runtime();
-    reset_listener();
-    socket_list.clear(); // close all clients
 
+    ctx.stop(); // first send stop signal to io context
     while(!ctx.stopped());
     ctx.reset();
+
     if(ctx_handle.joinable()){
         ctx_handle.join(); // close context handle
     }
+
+    socket_list.clear(); // close all clients
 }
 
 void Server::broadcast_string(const std::string& data) {
@@ -183,11 +176,37 @@ void Server::server_runtime() { // check for and remove invalid clients
 
 // Async Loopbacks
 
+void Server::start_accept() {
+    listener.open(endpoint.protocol());
+    listener.set_option(asio::ip::tcp::acceptor::reuse_address(true));
+    listener.bind(endpoint);
+    listener.listen(4); // 4 concurrent incoming connections
+
+    do_accept();
+}
+
+void Server::stop_accept() {
+    std::unique_lock<std::shared_mutex> lock(socket_list_lock);
+    if(listener.is_open()){
+        listener.cancel();
+        listener.close();
+    }
+}
+
 void Server::do_accept() {
     if(!listener.is_open()) return;
 
     listener.async_accept([this](std::error_code er, asio::ip::tcp::socket soc){
-        if(!listener.is_open()) return; // listener shutdown
+        if(!listener.is_open()){
+            connect_protect = 0;
+            return; // listener shutdown
+        }
+
+        if (last_connection_time.getSeconds() > 30) {
+            connect_protect = 0;
+        }
+
+        last_connection_time.restart();
 
         if(soc.is_open()){
             const auto& ep = soc.remote_endpoint();
@@ -198,7 +217,17 @@ void Server::do_accept() {
             dlog << "error accepting connection\n";
         }
 
-        do_accept();
+        if(++connect_protect > 10){
+            stop_accept();
+
+            std::thread([this](){
+                Clock::sleepMilliseconds(int64_t(200) * connect_protect); // wait 1 second for new connections to prevent DDoS
+                last_connection_time.restart();
+                start_accept();
+            }).detach();
+        } else {
+            do_accept();
+        }
     });
 }
 
