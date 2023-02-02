@@ -104,7 +104,7 @@ void Socket::wait_for_flush() {
     do {
         Clock::sleepMilliseconds(2);
         std::unique_lock<std::shared_mutex> lock(outgoing_command_lock);
-    } while(!flush_command_package());
+    } while(!flush_command_package() && is_valid());
 }
 
 void Socket::send_command(Command&& cmd) {

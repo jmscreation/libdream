@@ -98,9 +98,12 @@ void Client::stop_client() {
 
 
 void Client::client_runtime() { // check for and remove invalid clients
+    std::shared_lock<std::shared_mutex> lock(runtime_mtx);
     if(server){
         if(!server->is_valid()){
             dlog << "disconnected from server\n";
+            lock.release();
+            std::unique_lock<std::shared_mutex> ulock(runtime_mtx);
             server.reset();
         } else if(!server->is_authorized()) {
             server->client_authorize();
