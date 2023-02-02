@@ -30,7 +30,7 @@ class Server {
 
     ServerHeader header;
     uint64_t cur_uuid;
-    std::map<uint64_t, std::unique_ptr<Socket>> clients;
+    std::map<uint64_t, std::unique_ptr<Socket>> socket_list;
     std::vector<std::unique_ptr<Socket>> expired_clients;
 
     Block blobdata;
@@ -49,7 +49,7 @@ class Server {
     std::unique_ptr<Socket> generate_socket(asio::ip::tcp::socket&& soc, uint64_t id, const std::string& name);
 
     // server runtime - check clients and validate the session
-    std::shared_mutex runtime_lock; // runtime mutex
+    std::shared_mutex socket_list_lock; // runtime mutex
     void server_runtime();
 
     // asynchronous callbacks
@@ -70,7 +70,7 @@ public:
 
     Block& get_block() { return blobdata; }
 
-    size_t get_client_count() { std::shared_lock<std::shared_mutex> lock(runtime_lock); return clients.size(); }
+    size_t get_client_count() { std::shared_lock<std::shared_mutex> lock(socket_list_lock); return socket_list.size(); }
 
     std::vector<Connection> get_client_list();
 

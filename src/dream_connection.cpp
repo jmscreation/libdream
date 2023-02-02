@@ -70,9 +70,9 @@ SocketRef Connection::get_socket() {
     if(_server){
         Server* server = *_server;
 
-        std::shared_lock<std::shared_mutex> lock(server->runtime_lock);
-        if(server->clients.count(uuid))
-            cobj = SocketRef(server->clients.at(uuid).get());
+        std::shared_lock<std::shared_mutex> lock(server->socket_list_lock);
+        if(server->socket_list.count(uuid))
+            cobj = SocketRef(server->socket_list.at(uuid).get());
     } else {
         Client** _client = std::get_if<Client*>(&controller);
         if(_client){

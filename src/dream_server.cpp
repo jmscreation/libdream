@@ -16,7 +16,7 @@ void Server::start_context_handle() {
 }
 
 void Server::reset_listener() {
-    std::unique_lock<std::shared_mutex> lock(runtime_lock);
+    std::unique_lock<std::shared_mutex> lock(socket_list_lock);
     if(listener.is_open()){
         listener.cancel();
         listener.close();
@@ -80,7 +80,7 @@ void Server::stop_server() {
 
     stop_runtime();
     reset_listener();
-    clients.clear(); // close all clients
+    socket_list.clear(); // close all clients
 
     while(!ctx.stopped());
     ctx.reset();
@@ -90,9 +90,9 @@ void Server::stop_server() {
 }
 
 void Server::broadcast_string(const std::string& data) {
-    std::shared_lock lock(runtime_lock);
+    std::shared_lock<std::shared_mutex> lock(socket_list_lock);
 
-    for(auto& [id,client] : clients){
+    for(auto& [id,client] : socket_list){
         client->send_command(Command(Command::STRING, data));
     }
 }
@@ -100,9 +100,9 @@ void Server::broadcast_string(const std::string& data) {
 std::vector<Connection> Server::get_client_list() {
     std::vector<Connection> list;
 
-    std::shared_lock<std::shared_mutex> lock(runtime_lock);
+    std::shared_lock<std::shared_mutex> lock(socket_list_lock);
 
-    for(const auto& [id, client] : clients){
+    for(const auto& [id, client] : socket_list){
         Connection& user = list.emplace_back(this);
         user.uuid = id;
         user.name = client->get_name();
@@ -114,11 +114,11 @@ std::vector<Connection> Server::get_client_list() {
 // Callbacks
 
 void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
-    std::unique_lock<std::shared_mutex> lock(runtime_lock);
-    while(clients.count(cur_uuid)) ++cur_uuid; // find a free uuid
+    std::unique_lock<std::shared_mutex> lock(socket_list_lock);
+    while(socket_list.count(cur_uuid)) ++cur_uuid; // find a free uuid
 
     dlog << "new client [" << cur_uuid << "]\n";
-    auto& c = clients.insert_or_assign(
+    auto& c = socket_list.insert_or_assign(
                                 cur_uuid,
                                 generate_socket(std::move(soc), cur_uuid, "NoName")
                             ).first->second;
@@ -146,15 +146,15 @@ void Server::new_client_socket(asio::ip::tcp::socket&& soc) {
 
 void Server::server_runtime() { // check for and remove invalid clients
 
-    for(auto it = clients.begin(); it != clients.end(); ++it){
+    for(auto it = socket_list.begin(); it != socket_list.end(); ++it){
         auto& [id, client] = *it;
 
         if(!client->is_valid()){
             if(client->is_authorizing() || client->has_weak_references()) continue;
             dlog << client->get_name() << " disconnected\n";
             expired_clients.emplace_back(std::move(client)); // move expired client to gc
-            it = clients.erase(it); // remove and continue
-            if(it == clients.end() || --it == clients.end()) break;
+            it = socket_list.erase(it); // remove and continue
+            if(it == socket_list.end() || --it == socket_list.end()) break;
             continue;
 
         } else if(!client->is_authorized()) {
@@ -166,7 +166,7 @@ void Server::server_runtime() { // check for and remove invalid clients
     }
 
     if(ping_timeout.getSeconds() > 10){
-        for(auto& [id, client] : clients){
+        for(auto& [id, client] : socket_list){
             if(!client->is_authorized()) continue;
 
             client->send_command(Command(Command::PING));
