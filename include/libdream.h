@@ -4,6 +4,12 @@
 #define ASIO_STANDALONE
 #endif
 
+#ifndef DREAM_NO_CONNECTION_LIMIT
+	#ifndef DREAM_CONNECTION_LIMIT
+	#define DREAM_CONNECTION_LIMIT 20
+	#endif
+#endif
+
 #include <asio.hpp>
 
 #include "ip_tools.h"

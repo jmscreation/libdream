@@ -25,7 +25,7 @@ void Server::start_runtime() {
             }
             
             do {
-                listener.close();
+                stop_accept();
                 Clock::sleepMilliseconds(50);
             } while(connect_protect > 0);
         });
@@ -217,7 +217,8 @@ void Server::do_accept() {
             dlog << "error accepting connection\n";
         }
 
-        if(++connect_protect > 10){
+#ifdef DREAM_CONNECTION_LIMIT
+        if(++connect_protect > DREAM_CONNECTION_LIMIT){
             stop_accept();
 
             std::thread([this](){
@@ -225,7 +226,9 @@ void Server::do_accept() {
                 last_connection_time.restart();
                 start_accept();
             }).detach();
-        } else {
+        } else
+#endif
+        {
             do_accept();
         }
     });
