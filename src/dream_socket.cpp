@@ -15,7 +15,7 @@ Socket::~Socket() {
 
 // very low level interface for sending out data asynchronously - this is not to be used externally
 bool Socket::send_raw_data(const char* data, size_t length, std::function<void(bool success)> on_complete) {
-    std::unique_lock<std::mutex> lock(shutdown_lock);
+    std::unique_lock<std::recursive_mutex> lock(shutdown_lock);
 
     if(!is_valid()) return false;
 
@@ -117,7 +117,7 @@ void Socket::send_command(Command&& cmd) {
 }
 
 void Socket::server_authorize() {
-    std::unique_lock<std::mutex> lock(shutdown_lock);
+    std::unique_lock<std::recursive_mutex> lock(shutdown_lock);
     if(authorizing) return;
 
     authorizing = true;
@@ -152,8 +152,6 @@ void Socket::server_authorize() {
 }
 
 void Socket::client_authorize() {
-    std::unique_lock<std::mutex> lock(shutdown_lock);
-
     for(int i=0; i < 4 && // retry 3 times
         (
             !out_payload_protection.try_acquire() ||
@@ -176,7 +174,7 @@ void Socket::runtime_update() {
 }
 
 void Socket::shutdown() {
-    std::unique_lock<std::mutex> lock(shutdown_lock);
+    std::unique_lock<std::recursive_mutex> lock(shutdown_lock);
 
     if(socket.is_open()){
         dlog << "socket " << name << " disconnected\n";
@@ -284,7 +282,7 @@ void Socket::process_command(Command& cmd) {
     switch(cmd.type){
         case Command::PING:
         {
-            std::unique_lock<std::mutex> lock(shutdown_lock);
+            std::unique_lock<std::shared_mutex> lock(outgoing_command_lock);
             out_commands.emplace(Command(Command::RESPONSE));
             break;
         }

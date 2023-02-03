@@ -32,7 +32,7 @@ class Socket : public Hookable<Socket> {
     std::atomic_bool server_authorized, authorizing, valid;
     alignas(uint32_t) char cmdbuf[4]; // buffer for new incoming command data length data
 
-    std::mutex shutdown_lock;
+    std::recursive_mutex shutdown_lock;
     std::shared_mutex outgoing_command_lock;
     std::shared_mutex incoming_command_lock;
 
